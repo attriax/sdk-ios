@@ -25,6 +25,7 @@ enum AttriaxRequestBuilders {
         isFirstLaunch: Bool,
         sessionId: String?,
         sessionStartedAtIso: String?,
+        attStatus: String? = nil,
         attestation: AttriaxJSONObject? = nil
     ) -> AttriaxApiRequest {
         var body = AttriaxJSONObject()
@@ -56,6 +57,10 @@ enum AttriaxRequestBuilders {
 
         if let sid = sessionId { body["sessionId"] = sid }
         if let started = sessionStartedAtIso { body["sessionStartedAt"] = started }
+        // CHUNK C — ATT status TOP-LEVEL (mirrors SdkV1OpenDto.attStatus). Omitted when
+        // nil/blank; `unknown` is a meaningful value and IS sent (distinguishes "no
+        // ATT / pre-14" from an explicit determination).
+        if let status = attStatus, !status.isEmpty { body["attStatus"] = status }
         if let att = attestation { body["attestation"] = att }
         return AttriaxApiRequest(kind: AttriaxApiRequest.kindOpen, path: AttriaxEndpoints.open, body: body)
     }

@@ -4,8 +4,13 @@ import PackageDescription
 // Attriax native iOS SDK (Epic 9.3).
 //
 // Foundation-only — NO external dependencies. The library links UIKit for
-// `UIDevice.identifierForVendor` and AdSupport/AppTrackingTransparency for the
-// (chunk-C) IDFA/ATT seam; those are weak platform frameworks, not SwiftPM deps.
+// `UIDevice.identifierForVendor` and the CHUNK-C Apple platform frameworks —
+// AppTrackingTransparency (ATT), AdSupport (IDFA), AdServices (Apple Search Ads),
+// StoreKit (SKAdNetwork), DeviceCheck (App Attest) — each imported behind
+// `#if canImport(...)` and used behind `@available(...)`. SwiftPM auto-links these
+// system frameworks on import; they are NOT SwiftPM deps. The base config (all
+// CHUNK-C features OFF) references none of their symbols at runtime, and the min
+// deployment target stays iOS 13 (the 14+/14.3+/16.1+ APIs are availability-gated).
 //
 // Publish coordinates mirror the Android core decision: per-platform native
 // core, standalone Swift (no shared cross-platform core), manual/local publish,

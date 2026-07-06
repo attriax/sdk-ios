@@ -23,6 +23,11 @@ enum AttriaxEndpoints {
     static let revenueConvert = "/api/sdk/v1/revenue/convert-to-usd"
     static let config = "/api/sdk/v1/config"
     static let attestationChallenge = "/api/sdk/attestation/challenge"
+    // CHUNK C — Apple framework endpoints.
+    static let asaToken = "/api/sdk/v1/asa/token"
+    /// SKAN conversion-value config pull; the project token is appended as a path
+    /// segment (`GET /api/sdk/v1/skan/conversion-config/:projectToken`).
+    static let skanConversionConfigPrefix = "/api/sdk/v1/skan/conversion-config/"
 }
 
 /// An outbound SDK request modeled as a kind + a JSON body map (PARITY §7/§8).

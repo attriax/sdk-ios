@@ -34,7 +34,8 @@ Core engine + tracking:
 - **Session** — continuation-window policy + snapshot store + snapshot state
   machine; init emits the initial `start` and any recovered `end` (row S5).
 - **Public surface** — `Attriax`, `AttriaxTracking`, `AttriaxSdk.create`,
-  `validateReceipt`.
+  `validateReceipt` (CHUNK C adds `attriax.att` / `attriax.skan` and the
+  `AttriaxConfig.attestationProvider` / `asaAttributionEnabled` opt-ins).
 - **Platform I/O** — `URLSession` transport (stamps the UA, unwraps `{data}`,
   typed errors), suite-scoped `UserDefaults` store, `NWPathMonitor` connectivity,
   IDFV device-id source (+ ATT/IDFA supplier seam).
@@ -63,11 +64,33 @@ Core engine + tracking:
   injection (a batch carrying a live-session event gets a synthetic heartbeat;
   delivery bumps last-activity).
 
-## Explicitly NOT built (Chunk C — clean seams left)
+## What CHUNK C adds (Apple frameworks — inert/opt-in by config)
 
-- **Chunk C** — ATT / ASA / SKAN / App Attest. The IDFA source returns nil until
-  an ATT-authorized supplier is wired in; no AdSupport/ATT symbol is referenced,
-  so the SDK links without an ATT usage description in this chunk.
+Every Apple framework is imported behind `#if canImport(...)` and used behind
+`@available(...)`; the base config (all OFF) references none of their symbols and the
+min deployment target stays iOS 13.
+
+- **ATT** (`attriax.att`, AppTrackingTransparency, iOS 14+) — `att.status` reads
+  `ATTrackingManager.trackingAuthorizationStatus` (mapped to `authorized|denied|
+  restricted|notDetermined|unknown`) and it is stamped TOP-LEVEL on the app-open as
+  `attStatus`; `att.requestTrackingAuthorization { … }` is the host opt-in prompt (the
+  SDK NEVER auto-prompts).
+- **IDFA** (AdSupport, iOS 14+) — the chunk-A IDFA seam is wired to
+  `ASIdentifierManager.advertisingIdentifier`, consulted ONLY when ATT `.authorized`
+  AND `collectAdvertisingId` (source `ios_idfa`); else IDFV / persistent storage.
+- **Apple Search Ads** (AdServices, iOS 14.3+) — `asaAttributionEnabled` captures
+  `AAAttribution.attributionToken()` and POSTs it to `/api/sdk/v1/asa/token`
+  (best-effort, off-thread, never blocks init).
+- **SKAdNetwork** (`attriax.skan`, StoreKit; SKAN 4 = iOS 16.1+ with 14/15 fallbacks)
+  — a thin honest passthrough: `registerForAttribution()`, `updateConversionValue(fine,
+  coarseValue:, lockWindow:)`, and `fetchConversionConfig()` (pulls the project CV
+  rules from `/api/sdk/v1/skan/conversion-config/:projectToken`).
+- **App Attest** (`AttriaxConfig.attestationProvider`, DeviceCheck, iOS 14+) — the
+  `AttriaxAttestationProvider` seam + `NoopAttestationProvider` default +
+  `AppAttestAttestationProvider` (`DCAppAttestService`). When `attestationEnabled` and a
+  provider is set, init resolves a challenge nonce → App Attest object → the open body
+  carries `attestation: { provider:"app_attest", token, nonce, keyId }`. ANY failure →
+  no envelope, open still sent.
 
 ## Usage
 

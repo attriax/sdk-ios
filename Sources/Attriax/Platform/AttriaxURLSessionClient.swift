@@ -38,16 +38,24 @@ final class AttriaxURLSessionClient: NSObject, AttriaxHttpClient {
     }
 
     func post(_ path: String, _ body: String) throws -> AttriaxHttpResponse {
+        try send(path: path, method: "POST", body: body)
+    }
+
+    func get(_ path: String) throws -> AttriaxHttpResponse {
+        try send(path: path, method: "GET", body: nil)
+    }
+
+    private func send(path: String, method: String, body: String?) throws -> AttriaxHttpResponse {
         guard let url = URL(string: joinURL(baseURL, path)) else {
             throw AttriaxTransportError.transport(underlying: nil)
         }
         var request = URLRequest(url: url)
-        request.httpMethod = "POST"
+        request.httpMethod = method
         // Set explicitly on the request too (belt-and-braces over the session
         // default), so the load-bearing UA is present on every send.
         request.setValue(userAgent, forHTTPHeaderField: "User-Agent")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = Data(body.utf8)
+        if let body = body { request.httpBody = Data(body.utf8) }
 
         let semaphore = DispatchSemaphore(value: 0)
         var resultData: Data?

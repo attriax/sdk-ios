@@ -54,6 +54,21 @@ protocol AttriaxHttpClient: AnyObject {
     /// - Returns: the successful (2xx) response, envelope-unwrapped.
     /// - Throws: `AttriaxTransportError`.
     func post(_ path: String, _ body: String) throws -> AttriaxHttpResponse
+
+    /// GET `path` (appended to the configured base URL). Used only by the CHUNK-C
+    /// SKAN CV-config pull (a low-frequency, best-effort read). A default
+    /// implementation throws `.transport` so existing fake transports (which only
+    /// model POST) need not implement it; the real `AttriaxURLSessionClient`
+    /// overrides it.
+    /// - Returns: the successful (2xx) response, envelope-unwrapped.
+    /// - Throws: `AttriaxTransportError`.
+    func get(_ path: String) throws -> AttriaxHttpResponse
+}
+
+extension AttriaxHttpClient {
+    func get(_ path: String) throws -> AttriaxHttpResponse {
+        throw AttriaxTransportError.transport(underlying: nil)
+    }
 }
 
 /// Connectivity port. Implementations invoke `onConnectivityRestored` on regain.

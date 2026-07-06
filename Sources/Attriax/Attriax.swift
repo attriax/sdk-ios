@@ -45,6 +45,11 @@ public final class Attriax {
     private var consentQueuePolicy: AttriaxConsentQueuePolicy!
     private var deepLinkManager: AttriaxDeepLinkManager!
 
+    // CHUNK C — Apple frameworks (all inert/opt-in by config).
+    private let attStatusReader: AttriaxAttStatusReader
+    private let attestationManager: AttriaxAttestationManager
+    private let asaTokenCapture: AttriaxAsaTokenCapture?
+
     /// Serial background queue for flushes (mirrors the Android single-thread flush
     /// executor). All network I/O runs here, off the caller's thread.
     private let flushQueue = DispatchQueue(label: "com.attriax.sdk.flush")
@@ -76,6 +81,20 @@ public final class Attriax {
     /// Public deep-link surface (PARITY §6).
     public private(set) lazy var deepLinks = AttriaxDeepLinks(engine: self)
 
+    /// Public App Tracking Transparency surface (PARITY §11; CHUNK C). Read
+    /// `att.status` and opt-in `att.requestTrackingAuthorization`.
+    public private(set) lazy var att = AttriaxAtt(reader: attStatusReader)
+
+    /// Public SKAdNetwork surface (PARITY §13; CHUNK C). Passthrough conversion-value
+    /// updates + the optional CV-config pull.
+    public private(set) lazy var skan = AttriaxSkan(
+        passthrough: AttriaxSkanPassthrough(),
+        configFetcher: AttriaxSkanConfigFetcher(
+            transport: transport,
+            projectToken: config.normalizedProjectToken
+        )
+    )
+
     init(
         config: AttriaxConfig,
         store: AttriaxKeyValueStore,
@@ -87,7 +106,9 @@ public final class Attriax {
         scheduler: AttriaxScheduler = AttriaxNoopScheduler(),
         lifecycleBinderFactory: (AttriaxSessionLifecycleManager) -> AttriaxLifecycleBinder = { _ in AttriaxNoopLifecycleBinder() },
         consentTransport: AttriaxConsentTransport? = nil,
-        consentSyncQueue: DispatchQueue = DispatchQueue(label: "com.attriax.sdk.consent")
+        consentSyncQueue: DispatchQueue = DispatchQueue(label: "com.attriax.sdk.consent"),
+        attStatusReader: AttriaxAttStatusReader = AttriaxNoopAttStatusReader(),
+        asaCaptureQueue: DispatchQueue = DispatchQueue(label: "com.attriax.sdk.asa")
     ) {
         self.config = config
         self.store = store
@@ -97,6 +118,21 @@ public final class Attriax {
         self.deviceIdentityStore = deviceIdentityStore
         self.clock = clock
         self.anonymousTrackingFlag = config.anonymousTracking
+
+        // CHUNK C — Apple frameworks. All inert unless opted in via config.
+        self.attStatusReader = attStatusReader
+        self.attestationManager = AttriaxAttestationManager(
+            enabled: config.attestationEnabled,
+            provider: config.attestationProvider,
+            fetchChallenge: { try AttriaxAttestationChallengeFetcher(transport: transport).fetch() }
+        )
+        self.asaTokenCapture = config.asaAttributionEnabled
+            ? AttriaxAsaTokenCapture(
+                transport: transport,
+                projectToken: config.normalizedProjectToken,
+                queue: asaCaptureQueue
+            )
+            : nil
 
         self.queue = AttriaxQueueManager(store: store, maxQueueSize: config.maxQueueSize)
 
@@ -232,6 +268,11 @@ public final class Attriax {
 
         scheduleAppOpenIfNeeded()
         bootstrapSession()
+
+        // CHUNK C — Apple Search Ads: capture + POST the AdServices attribution token
+        // (opt-in via config.asaAttributionEnabled). Fire-and-forget off the main
+        // thread; never blocks init and swallows every failure.
+        asaTokenCapture?.capture()
 
         // Flush any consent decision persisted with pendingSync across a restart.
         consentManager.flushPendingSync()
@@ -763,11 +804,31 @@ public final class Attriax {
         let identity = deviceIdentity
         stateLock.unlock()
 
-        guard enabled, let identity = identity else { return }
+        guard enabled, identity != nil else { return }
 
-        // CHUNK C: attestation resolves a nonce challenge + provider token before
-        // enqueuing the open. Here the fast path enqueues immediately with no
-        // attestation envelope. The attestation seam is intentionally not built.
+        // CHUNK C — attestation (PARITY §9) resolves a nonce challenge + provider token,
+        // both blocking I/O, so it must NOT run on the init thread. When enabled, build
+        // + enqueue the app-open on the background flush queue after resolving the
+        // (inert-by-default) envelope; when disabled, keep the synchronous fast path so
+        // there is zero behavior change for the common case (attestation off).
+        if !attestationManager.isEnabled {
+            buildAndEnqueueAppOpen(attestation: nil)
+            return
+        }
+        flushQueue.async { [weak self] in
+            guard let self = self else { return }
+            // resolveEnvelope never throws; a failed challenge / nil provider / any
+            // error → nil envelope, open still sent (row AT2).
+            self.buildAndEnqueueAppOpen(attestation: self.attestationManager.resolveEnvelope())
+        }
+    }
+
+    /// Build the app-open with the (optional) attestation envelope + the top-level ATT
+    /// status and enqueue it, then flush when attribution dispatch is allowed. Shared
+    /// by the synchronous (attestation-disabled) and background (attestation-enabled)
+    /// paths so the enqueue/hoist/flush semantics are identical (PARITY §3/§5/§9/§11).
+    private func buildAndEnqueueAppOpen(attestation: AttriaxJSONObject?) {
+        guard let identity = withState({ deviceIdentity }) else { return }
         let open = AttriaxRequestBuilders.buildOpen(
             projectToken: config.normalizedProjectToken,
             context: context,
@@ -776,7 +837,10 @@ public final class Attriax {
             isFirstLaunch: withState { firstLaunchFlag },
             sessionId: nil,
             sessionStartedAtIso: nil,
-            attestation: nil
+            // CHUNK C — ATT status stamped TOP-LEVEL (mirrors the api SdkV1OpenDto.attStatus;
+            // NOT nested under device). `.unknown` on pre-iOS-14 / framework-absent.
+            attStatus: attStatusReader.currentStatus().wireValue,
+            attestation: attestation
         )
         enqueue(open)
         // App-open carries attribution/install-referrer data (attribution-linked).

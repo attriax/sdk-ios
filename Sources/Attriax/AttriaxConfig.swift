@@ -34,6 +34,17 @@ public struct AttriaxConfig {
     public let sessionHeartbeatInterval: TimeInterval
     public let firstLaunchSessionHeartbeatInterval: TimeInterval
     public let attestationEnabled: Bool
+    /// CHUNK C — the App Attest (or custom) attestation provider. INERT unless
+    /// `attestationEnabled` is `true` AND this is non-nil; a nil provider degrades to
+    /// the noop and no envelope is ever attached. Construct
+    /// `AppAttestAttestationProvider()` (iOS 14+) or use `AttriaxAppAttest.provider()`
+    /// (availability-safe) to supply App Attest.
+    public let attestationProvider: AttriaxAttestationProvider?
+    /// CHUNK C — Apple Search Ads / AdServices attribution-token capture. When `true`
+    /// the SDK captures `AAAttribution.attributionToken()` on init and POSTs it to
+    /// `/api/sdk/v1/asa/token` (best-effort, off the main thread, never blocks init).
+    /// Defaults to `false` (opt-in).
+    public let asaAttributionEnabled: Bool
     public let pinnedCertificateSHA256Fingerprints: [String]
 
     public init(
@@ -54,6 +65,8 @@ public struct AttriaxConfig {
         sessionHeartbeatInterval: TimeInterval = 5 * 60,
         firstLaunchSessionHeartbeatInterval: TimeInterval = 30,
         attestationEnabled: Bool = false,
+        attestationProvider: AttriaxAttestationProvider? = nil,
+        asaAttributionEnabled: Bool = false,
         pinnedCertificateSHA256Fingerprints: [String] = []
     ) {
         precondition(maxQueueSize > 0, "maxQueueSize must be positive")
@@ -74,6 +87,8 @@ public struct AttriaxConfig {
         self.sessionHeartbeatInterval = sessionHeartbeatInterval
         self.firstLaunchSessionHeartbeatInterval = firstLaunchSessionHeartbeatInterval
         self.attestationEnabled = attestationEnabled
+        self.attestationProvider = attestationProvider
+        self.asaAttributionEnabled = asaAttributionEnabled
         self.pinnedCertificateSHA256Fingerprints = pinnedCertificateSHA256Fingerprints
     }
 

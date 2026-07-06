@@ -101,8 +101,103 @@ The heterogeneous-dictionary idiom concern from §1 extends to the new files. Ve
   background run-loop thread. Confirm ticks fire (the `Port()` keeps the loop alive)
   and `cancel()` / `shutdown()` stop them without leaking the thread.
 
+## 7. CHUNK C — Apple frameworks (ATT / IDFA / ASA / SKAdNetwork / App Attest)
+
+CHUNK C wires the real Apple platform frameworks. **This is the riskiest chunk** (most
+novel Apple API surface) and, like A/B, is **code-complete-UNVERIFIED** — it has not
+been compiled or run. Every framework is optional at runtime: the SDK must build + run
+on the **base config with all of these OFF** and degrade gracefully when an OS version
+or framework is unavailable.
+
+### Frameworks, min iOS, and the config flag that gates each
+
+| Framework | Symbols | Min iOS | Config gate | Wire shape |
+|---|---|---|---|---|
+| **AppTrackingTransparency** (ATT) | `ATTrackingManager.trackingAuthorizationStatus` / `requestTrackingAuthorization` | 14.0 | always read; prompt is host opt-in (never auto) | `attStatus` TOP-LEVEL on the open body: `authorized\|denied\|restricted\|notDetermined\|unknown` (`SdkV1OpenDto.attStatus`) |
+| **AdSupport** (IDFA) | `ASIdentifierManager.shared().advertisingIdentifier` | 14.0 | `collectAdvertisingId` **AND** ATT `.authorized` | device id `deviceIdSource: ios_idfa` (else `ios_idfv` / `persistent_storage`) |
+| **AdServices** (Apple Search Ads) | `AAAttribution.attributionToken()` | 14.3 | `asaAttributionEnabled` | `POST /api/sdk/v1/asa/token` body `{ projectToken, token }` (`SdkAsaTokenDto`) |
+| **StoreKit** (SKAdNetwork) | `updatePostbackConversionValue` (16.1) / `updateConversionValue` (15.4) / `registerAppForAdNetworkAttribution` (14) | 14.0 (SKAN 4 coarse/lock = 16.1) | host-driven via `attriax.skan` | CV-config pull `GET /api/sdk/v1/skan/conversion-config/:projectToken` (`SdkCvConfigResponse`) |
+| **DeviceCheck** (App Attest) | `DCAppAttestService.shared` (`isSupported`/`generateKey`/`attestKey`) | 14.0 | `attestationEnabled` **AND** `attestationProvider != nil` | envelope under `attestation` on the open body (`SdkAttestationDto`) |
+
+**App Attest envelope fields** (assembled in `AttriaxAttestationManager.resolveEnvelope`,
+attached under `open.attestation`): `provider: "app_attest"`, `token` (base64 of the
+`DCAppAttestService.attestKey` attestation object), `nonce` (the SDK-issued challenge
+nonce, echoed for the server to match), `keyId` (the `generateKey` key id; App-Attest-only,
+omitted when nil). `clientDataHash = SHA256(nonce)` — the server recomputes this to bind
+the exact nonce it issued.
+
+### Availability / canImport gates to eyeball at compile time
+
+Every Apple symbol is **doubly gated**: `#if canImport(<Framework>)` (so non-Apple
+targets never reference it) **plus** `@available(...)` / `if #available(...)` at each
+call site (so the iOS-13 min-deployment build is legal). Verify these files compile with
+the gates intact:
+
+- `Sources/Attriax/Platform/AttriaxAppTrackingTransparency.swift` — `#if canImport(AppTrackingTransparency)`
+  + `if #available(iOS 14, *)` in `currentStatus`/`requestAuthorization`/`map`; the IDFA
+  supplier's `#if canImport(AdSupport)` + `.authorized` gate + all-zero-IDFA reject.
+- `Sources/Attriax/Platform/AttriaxAppAttestProvider.swift` — the whole
+  `AppAttestAttestationProvider` body is inside `#if canImport(DeviceCheck)` **and**
+  `@available(iOS 14.0, macCatalyst 14.0, tvOS 15.0, *)`; `CryptoKit` behind
+  `#if canImport(CryptoKit)`. `AttriaxAppAttest.provider()` is the availability-safe
+  factory a pre-14 host can name unconditionally (returns the noop below 14).
+- `Sources/Attriax/Platform/AttriaxAsaTokenCapture.swift` — `#if canImport(AdServices)`
+  + `if #available(iOS 14.3, *)` around `AAAttribution.attributionToken()`.
+- `Sources/Attriax/Platform/AttriaxSkanPassthrough.swift` — `#if canImport(StoreKit)`
+  + the newest-first `if #available(iOS 16.1, *) … else if 15.4 … else if 14.0` ladder;
+  `mapCoarse` is `@available(iOS 16.1, *)`. Expect a deprecation *warning* (not error) on
+  the 15.4 `updateConversionValue` branch — that is fine.
+- `Sources/Attriax/AttriaxAtt.swift` / `AttriaxSkan.swift` / `AttriaxAttestation.swift` —
+  PURE public surfaces (no framework imports); the enum wire strings must match the api
+  DTO literals exactly.
+- `Sources/Attriax/Internal/Skan/AttriaxSkanConfig.swift` — heterogeneous-dict decode
+  (`map[key].flatMap { $0 } as? T`), same §1 idiom concern; the `CharacterSet` path-segment
+  encoding for the project token.
+- `Sources/Attriax/AttriaxSdk.swift` — `injectAttestationStore` mutates
+  `AppAttestAttestationProvider.store` inside `#if canImport(DeviceCheck)` + `#available`.
+
+### On-device checks (the parts that CANNOT be proven in the Simulator)
+
+Base-config sanity first: with **all** CHUNK-C flags off (default config), init → app-open
+still succeeds and the open body carries `attStatus: "notDetermined"` (or `"unknown"` on
+a pre-14 OS) and **no** `attestation`.
+
+- **ATT prompt flow.** `attriax.att.status` reads without prompting. `attriax.att.requestTrackingAuthorization { … }`
+  shows the system dialog ONCE (needs `NSUserTrackingUsageDescription` in Info.plist);
+  the resolved status is stamped on the NEXT app-open's `attStatus`. Confirm the SDK does
+  NOT auto-prompt at init.
+- **IDFA only when authorized.** Before authorization / when denied, device id resolves to
+  `ios_idfv` (or `persistent_storage`), NOT `ios_idfa`, and no all-zero IDFA leaks. After
+  ATT `.authorized` **and** `collectAdvertisingId: true`, a relaunch resolves `ios_idfa`.
+  (IDFA is real-device only — the Simulator returns the zero IDFA.)
+- **ASA token capture.** With `asaAttributionEnabled: true`, init fires a background
+  `POST /api/sdk/v1/asa/token` with `{ projectToken, token }` where `token` is the opaque
+  `AAAttribution.attributionToken()`. Confirm it NEVER blocks init and silently no-ops
+  offline / on the Simulator (no token). **Needs a real device** (AdServices returns nil
+  in the Simulator).
+- **SKAN conversion update.** `attriax.skan.registerForAttribution()` seeds the first
+  postback; `attriax.skan.updateConversionValue(fine, coarseValue:, lockWindow:)` updates
+  it (coarse/lock honored only on 16.1+). `attriax.skan.fetchConversionConfig()` pulls the
+  project CV rules (404 → nil on unknown token). **SKAN postbacks are device-only** — the
+  Simulator does not deliver them; verify the calls don't crash and the config pull
+  round-trips.
+- **App Attest supported-device attestation + the challenge/envelope live path.** On a
+  **real device** (`DCAppAttestService.isSupported == true`; false in the Simulator), with
+  `attestationEnabled: true` and `attestationProvider: AppAttestAttestationProvider()` (or
+  `AttriaxAppAttest.provider()`): init → `POST /api/sdk/attestation/challenge` → App Attest
+  `generateKey`+`attestKey(clientDataHash: SHA256(nonce))` → the open body carries
+  `attestation: { provider:"app_attest", token, nonce, keyId }`. Confirm the key id
+  persists across launches (SDK `UserDefaults` suite) and — critically — that **every**
+  failure mode (Simulator/unsupported, `attestationEnabled:false`, nil provider, offline
+  challenge, thrown error) degrades to **no envelope, open still sent** — attestation must
+  NEVER break init.
+- **Queue restore.** Kill the app after an attested open is enqueued but before it flushes;
+  on relaunch the persisted `attestation` envelope (nested in the open body) round-trips
+  intact through `AttriaxQueueCodec` and the open still sends.
+
 ## Scope note
 
-This is CHUNK A + CHUNK B (core runtime + tracking + consent/anonymous + deep links +
-session lifecycle). The Apple frameworks (ATT/IDFA/ASA/SKAN, App Attest) arrive in
-CHUNK C and are stubbed with stable seams (IDFA supplier nil, no attestation).
+This is CHUNK A + CHUNK B + **CHUNK C** (core runtime + tracking + consent/anonymous +
+deep links + session lifecycle + the Apple frameworks: ATT / IDFA / Apple Search Ads /
+SKAdNetwork / App Attest). Every CHUNK-C framework is optional at runtime and inert by
+default; the base config references none of their symbols.

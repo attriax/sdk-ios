@@ -15,13 +15,19 @@ public enum AttriaxSdk {
 
     /// Build a runtime for `config`. Call `initialize()` afterwards to bootstrap.
     ///
-    /// - Parameter advertisingIdSupplier: optional supplier of the ATT-authorized
-    ///   IDFA. When absent, resolution falls through to `identifierForVendor`
-    ///   (source `ios_idfv`) or the persistent-storage device id. The ATT prompt +
-    ///   AdSupport wiring is CHUNK C.
+    /// CHUNK C wires the real Apple frameworks (all inert/opt-in by config):
+    ///  - the ATT status reader (`ATTrackingManager`) backs `attriax.att`,
+    ///  - the IDFA supplier reads `ASIdentifierManager.advertisingIdentifier` ONLY
+    ///    when ATT is `.authorized` AND `config.collectAdvertisingId` (source
+    ///    `ios_idfa`), else resolution falls through to IDFV / persistent storage,
+    ///  - App Attest / ASA / SKAN are driven from `config` + the public surfaces.
+    ///
+    /// - Parameter advertisingIdSupplier: optional OVERRIDE of the ATT-gated IDFA
+    ///   supplier. When nil (the default), the SDK uses its own ATT-gated
+    ///   `ASIdentifierManager` supplier; pass a closure only to inject a custom source.
     public static func create(
         config: AttriaxConfig,
-        advertisingIdSupplier: @escaping () -> String? = { nil }
+        advertisingIdSupplier: (() -> String?)? = nil
     ) -> Attriax {
         let store = AttriaxUserDefaultsStore()
 
@@ -37,15 +43,32 @@ public enum AttriaxSdk {
             requestTimeout: config.requestTimeout
         )
 
+        // CHUNK C — ATT reader (drives att.status and gates the IDFA rung).
+        let attReader = AttriaxAppTrackingTransparencyReader()
+
+        // CHUNK C — the IDFA supplier: an explicit override wins; otherwise the SDK's
+        // own ATT-gated ASIdentifierManager supplier (nil unless ATT-authorized AND
+        // collection enabled). The chunk-A IDFA seam is now wired to a real source.
+        let idfaSupplier: () -> String?
+        if let override = advertisingIdSupplier {
+            idfaSupplier = override
+        } else {
+            let attGated = AttriaxAttGatedAdvertisingIdSupplier(
+                collectAdvertisingId: config.collectAdvertisingId,
+                attStatus: { attReader.currentStatus() }
+            )
+            idfaSupplier = { attGated.advertisingId() }
+        }
+
         let sources = AttriaxIOSDeviceIdSources(
             collectAdvertisingId: config.collectAdvertisingId,
-            advertisingIdSupplier: advertisingIdSupplier
+            advertisingIdSupplier: idfaSupplier
         )
         let resolver = AttriaxDeviceIdentityResolver(sources: sources, collectAdvertisingId: config.collectAdvertisingId)
         let deviceIdentityStore = AttriaxDeviceIdentityStore(store: store, resolver: resolver)
 
         return Attriax(
-            config: config,
+            config: injectAttestationStore(config, store: store),
             store: store,
             transport: transport,
             connectivity: AttriaxNWPathConnectivityMonitor(),
@@ -56,8 +79,25 @@ public enum AttriaxSdk {
             // Foreground/background/terminate detection via UIApplication notifications.
             lifecycleBinderFactory: { manager in
                 AttriaxUIApplicationLifecycleBinder(lifecycleManager: manager)
-            }
+            },
+            // CHUNK C — real ATT reader behind att.status / the IDFA gate.
+            attStatusReader: attReader
         )
+    }
+
+    /// Inject the SDK's shared key/value store into an `AppAttestAttestationProvider`
+    /// created via the public store-free init, so the generated App Attest key id is
+    /// persisted in the SDK's `UserDefaults` suite rather than the standard defaults.
+    /// A custom (non-App-Attest) provider is returned untouched.
+    private static func injectAttestationStore(_ config: AttriaxConfig, store: AttriaxKeyValueStore) -> AttriaxConfig {
+        #if canImport(DeviceCheck)
+        if #available(iOS 14.0, macCatalyst 14.0, tvOS 15.0, *),
+           let provider = config.attestationProvider as? AppAttestAttestationProvider,
+           provider.store == nil {
+            provider.store = store
+        }
+        #endif
+        return config
     }
 
     private static func captureContext(_ config: AttriaxConfig) -> AttriaxContextSnapshot {
