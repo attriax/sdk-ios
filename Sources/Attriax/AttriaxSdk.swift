@@ -50,7 +50,13 @@ public enum AttriaxSdk {
             transport: transport,
             connectivity: AttriaxNWPathConnectivityMonitor(),
             context: snapshot,
-            deviceIdentityStore: deviceIdentityStore
+            deviceIdentityStore: deviceIdentityStore,
+            // Session heartbeat timer runs off the main thread (PARITY §3, row S3).
+            scheduler: AttriaxTimerScheduler(),
+            // Foreground/background/terminate detection via UIApplication notifications.
+            lifecycleBinderFactory: { manager in
+                AttriaxUIApplicationLifecycleBinder(lifecycleManager: manager)
+            }
         )
     }
 

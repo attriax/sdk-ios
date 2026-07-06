@@ -63,6 +63,50 @@ protocol AttriaxConnectivityMonitor: AnyObject {
     func unregister()
 }
 
+/// A cancellable, repeating scheduler port (PARITY §3, row S3 heartbeat timers).
+///
+/// The pure session-lifecycle manager schedules the heartbeat through this seam so
+/// timers stay deterministic in tests (a fake scheduler can fire ticks on demand
+/// with no wall-clock sleep). The iOS implementation runs a `Timer` on a dedicated
+/// run-loop thread OFF the main thread; a scheduled task must never leak, so
+/// `AttriaxScheduledHandle.cancel()` invalidates the underlying timer.
+protocol AttriaxScheduler: AnyObject {
+    /// Run `action` every `intervalMs` (first tick after one interval).
+    func schedulePeriodic(intervalMs: Int64, action: @escaping () -> Void) -> AttriaxScheduledHandle
+}
+
+/// A handle to a scheduled repeating task; `cancel()` stops future ticks.
+protocol AttriaxScheduledHandle: AnyObject {
+    func cancel()
+}
+
+/// A scheduler that never fires (used by the pure engine + tests). The iOS factory
+/// injects a real `AttriaxTimerScheduler`.
+final class AttriaxNoopScheduler: AttriaxScheduler {
+    private final class NoopHandle: AttriaxScheduledHandle {
+        func cancel() {}
+    }
+    func schedulePeriodic(intervalMs: Int64, action: @escaping () -> Void) -> AttriaxScheduledHandle {
+        NoopHandle()
+    }
+}
+
+/// Binds app foreground/background/terminate detection to the session lifecycle
+/// (PARITY §3, row S3). The engine calls `bind` once its session-lifecycle manager
+/// is ready and `unbind` on reset/dispose. The iOS implementation subscribes to
+/// `UIApplication` notifications; the pure engine + its tests use a no-op or fake
+/// binder and drive the lifecycle manager directly.
+protocol AttriaxLifecycleBinder: AnyObject {
+    func bind()
+    func unbind()
+}
+
+/// A no-op binder for tests / hosts that drive lifecycle transitions manually.
+final class AttriaxNoopLifecycleBinder: AttriaxLifecycleBinder {
+    func bind() {}
+    func unbind() {}
+}
+
 /// Supplies the raw native device-id candidates used by
 /// `AttriaxDeviceIdentityResolver`. The iOS implementation reads
 /// `identifierForVendor` (IDFV) and, when ATT-authorized and enabled, the IDFA.

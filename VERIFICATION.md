@@ -57,9 +57,52 @@ Point the SDK at the dev API (`http://<host>:33000`) and confirm:
   Simulator when IDFV is nil; UA is stable across launches; queue persists + retries
   across an app kill; the `{data:…}` envelope unwraps.
 
+## 5. CHUNK B — additional compile spots to eyeball
+
+The heterogeneous-dictionary idiom concern from §1 extends to the new files. Verify:
+
+- `Internal/Consent/AttriaxConsentStore.swift` / `AttriaxConsentTransport.swift` —
+  `obj[field] ?? nil` collapse feeding `decodeValues(_ value: Any?)`.
+- `Internal/DeepLink/AttriaxDeepLinkResolver.swift` (`stringMap`, `decodeResolution`)
+  and `AttriaxDeepLinkDeferredRecovery.swift` — nested `as? [String: Any?]` / `?? nil`.
+- `Internal/DeepLink/AttriaxUri.swift` — `NSRegularExpression.firstMatch` +
+  `range(at: 1)` group extraction, and the percent-decode byte loop.
+- `Internal/DeepLink/AttriaxDeepLinkManager.swift` — the late-bound
+  `resolveDispatch` optional and `DispatchSemaphore`-backed initial-link latch.
+- `Attriax.swift` init — the wired-after-init managers are IUOs
+  (`dispatcher!`/`sessionLifecycleManager!`/`lifecycleBinder!`/`deepLinkManager!`/
+  `consentQueuePolicy!`) so `[weak self]` closures are legal during phase-1 init.
+  If the compiler still objects to a `self` capture, the fix is to assign every
+  remaining stored property before the first self-capturing closure.
+
+## 6. CHUNK B — behavior to confirm on device / simulator
+
+- **Generation guard (the load-bearing consent fix).** Rapid
+  `setConsent(true)` → `setConsent(false)` must NOT leave analytics stuck on: the
+  in-flight older upsert echo is discarded when `generation` advanced
+  (`AttriaxConsentManager.runSyncLoop`). Reproduce with a fake `AttriaxConsentTransport`
+  that delays the first echo. `AttriaxConsentManager(consentTransport:)` /
+  `consentSyncQueue:` init params exist expressly for this test.
+- **Consent gate + queue rewrites.** With `gdprEnabled: true`, pending consent +
+  `anonymousTracking: true` captures analytics/session/deep-link ANONYMOUSLY (no
+  `deviceId`), NOT attribution/user/open. On `setConsent`, the three passes run:
+  identify (re-attach id), anonymize (strip id), discard (`gdpr_consent_denied`).
+- **Deep links.** `handleUniversalLink` / `handleUrl` → `/deep-links/resolve` with a
+  normalized `linkPath` (slashes stripped); 2s dedup suppresses a repeat; the resolve
+  is terminal-drop-exempt; deferred link recovers ONCE from the app-open response and
+  replays to a late listener; `createDynamicLink` sends BOOLEAN `iosRedirect`/
+  `androidRedirect`.
+- **Session lifecycle.** Heartbeat fires at 30s (first launch) then 5min off the main
+  thread; `didEnterBackground` pauses + flushes + cancels the heartbeat;
+  `didBecomeActive` resumes within the window or starts a new session (+ recovered
+  END) past it; `willTerminate` ends; a batch carrying a live-session event gets a
+  synthetic keep-alive and its delivery bumps last-activity.
+- **Timer thread.** `AttriaxTimerScheduler` runs the heartbeat `Timer` on a dedicated
+  background run-loop thread. Confirm ticks fire (the `Port()` keeps the loop alive)
+  and `cancel()` / `shutdown()` stop them without leaking the thread.
+
 ## Scope note
 
-This is CHUNK A (core runtime + tracking). Consent + anonymous mode, deep links,
-session-lifecycle timers/keep-alive, and the Apple frameworks (ATT/IDFA/ASA/SKAN,
-App Attest) arrive in later chunks and are stubbed with stable seams (IDFA supplier nil,
-dispatcher keep-alive builder nil, no attestation).
+This is CHUNK A + CHUNK B (core runtime + tracking + consent/anonymous + deep links +
+session lifecycle). The Apple frameworks (ATT/IDFA/ASA/SKAN, App Attest) arrive in
+CHUNK C and are stubbed with stable seams (IDFA supplier nil, no attestation).

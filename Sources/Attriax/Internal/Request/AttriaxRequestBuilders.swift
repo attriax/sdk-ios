@@ -264,6 +264,89 @@ enum AttriaxRequestBuilders {
         )
     }
 
+    /// Deep-link resolve (`/api/sdk/v1/deep-links/resolve`). Wire shape matches the
+    /// api `SdkV1DeepLinkResolveDto`: `projectToken` (required), `platform`
+    /// (required), and the optional `deviceId`/`deviceIdSource`/`rawUrl`/`linkPath`/
+    /// `source`/`sessionId`/`sessionRelativeTimeMs`/`isFirstLaunch`/`metadata`.
+    /// Unknown props are rejected by whitelist validation, so absent optionals are
+    /// OMITTED rather than sent as null. Identity is nullable to support anonymous
+    /// deep-link diagnostics while consent is pending (PARITY §5/§6). `linkPath` is
+    /// the normalized (slashes-stripped) path.
+    static func buildResolveDeepLink(
+        projectToken: String,
+        platform: String,
+        source: String?,
+        isFirstLaunch: Bool,
+        deviceId: String?,
+        deviceIdSource: String?,
+        rawUrl: String?,
+        linkPath: String?,
+        sessionId: String?,
+        sessionRelativeTimeMs: Int64?,
+        metadata: AttriaxJSONObject?
+    ) -> AttriaxApiRequest {
+        var body = AttriaxJSONObject()
+        body["projectToken"] = projectToken
+        if let did = deviceId { body["deviceId"] = did }
+        if let src = deviceIdSource { body["deviceIdSource"] = src }
+        body["platform"] = platform
+        if let raw = rawUrl { body["rawUrl"] = raw }
+        if let lp = linkPath { body["linkPath"] = lp }
+        if let s = source { body["source"] = s }
+        if let sid = sessionId { body["sessionId"] = sid }
+        if let rel = sessionRelativeTimeMs { body["sessionRelativeTimeMs"] = rel }
+        body["isFirstLaunch"] = isFirstLaunch
+        if let m = metadata { body["metadata"] = m }
+        return AttriaxApiRequest(
+            kind: AttriaxApiRequest.kindResolveDeepLink,
+            path: AttriaxEndpoints.deepLinksResolve,
+            body: body
+        )
+    }
+
+    /// Create dynamic link (`/api/sdk/v1/dynamic-links`). Wire shape matches the api
+    /// `SdkCreateDynamicLinkDto`: `projectToken` (required) + all-optional
+    /// `name`/`destinationUrl`/`iosRedirect`/`androidRedirect`/`previewTitle`/
+    /// `previewDescription`/`group`/`prefix`/`data`/`utm{Source,Medium,Campaign,
+    /// Term,Content}`. `iosRedirect`/`androidRedirect` are BOOLEANS (not URLs). The
+    /// redirects/socialPreview/utms value objects are flattened to these flat wire
+    /// keys. Sent DIRECTLY (non-queued) — it is a synchronous request/response.
+    static func buildCreateDynamicLink(
+        projectToken: String,
+        name: String?,
+        destinationUrl: String?,
+        group: String?,
+        prefix: String?,
+        iosRedirect: Bool?,
+        androidRedirect: Bool?,
+        previewTitle: String?,
+        previewDescription: String?,
+        utmSource: String?,
+        utmMedium: String?,
+        utmCampaign: String?,
+        utmTerm: String?,
+        utmContent: String?,
+        data: AttriaxJSONObject?
+    ) -> AttriaxJSONObject {
+        var body = AttriaxJSONObject()
+        body["projectToken"] = projectToken
+        if let n = name { body["name"] = n }
+        if let d = destinationUrl { body["destinationUrl"] = d }
+        if let ir = iosRedirect { body["iosRedirect"] = ir }
+        if let ar = androidRedirect { body["androidRedirect"] = ar }
+        if let pt = previewTitle { body["previewTitle"] = pt }
+        if let pd = previewDescription { body["previewDescription"] = pd }
+        if let g = group { body["group"] = g }
+        if let p = prefix { body["prefix"] = p }
+        if let d = data { body["data"] = d }
+        if let s = utmSource { body["utmSource"] = s }
+        if let m = utmMedium { body["utmMedium"] = m }
+        if let c = utmCampaign { body["utmCampaign"] = c }
+        if let t = utmTerm { body["utmTerm"] = t }
+        if let c = utmContent { body["utmContent"] = c }
+        return body
+    }
+
     /// Receipt validation body (`/api/sdk/v1/revenue/receipts/validate`). Sent
     /// DIRECTLY (non-queued) by `Attriax.validateReceipt`. FLAT per
     /// `SdkV1RevenueReceiptValidateDto` — every field except the token is optional.
