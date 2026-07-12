@@ -4,3 +4,8 @@
 DerivedData/
 .DS_Store
 Package.resolved
+
+# Vendored KMP core binary — a build artifact of sdk-kmp, not source. Reproduce with:
+#   cd sdk-kmp && ./gradlew :core:assembleAttriaxCoreReleaseXCFramework
+#   cp -R core/build/XCFrameworks/release/AttriaxCore.xcframework <sdk-ios>/Frameworks/
+Frameworks/AttriaxCore.xcframework/

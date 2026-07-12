@@ -1,11 +1,7 @@
 import Foundation
+import AttriaxCore
 
 /// SKAdNetwork coarse conversion-value tier (SKAN 4, iOS 16.1+).
-///
-/// Maps to `SKAdNetwork.CoarseConversionValue` (`.low`/`.medium`/`.high`). Exposed
-/// as a plain enum so the public surface does not require StoreKit at the call site
-/// and so pre-16.1 hosts can still name the value (it is simply ignored below 16.1,
-/// where only the fine value applies).
 public enum AttriaxSkanCoarseValue: String, Equatable {
     case low
     case medium
@@ -14,66 +10,51 @@ public enum AttriaxSkanCoarseValue: String, Equatable {
 
 /// Public SKAdNetwork surface (`attriax.skan`; PARITY §13 / Epic 12.2, CHUNK C).
 ///
-/// A thin, HONEST passthrough over Apple's `SKAdNetwork` — the SDK does NOT
-/// reimplement Apple's attribution. It exposes:
-///  - `registerForAttribution()` — the first-postback registration
-///    (`updatePostbackConversionValue` on iOS 16.1+, `registerAppForAdNetworkAttribution`
-///    / `updateConversionValue` on the 14/15 fallbacks),
-///  - `updateConversionValue(...)` — fine (+ optional coarse / lockWindow on 16.1+),
-///  - `applyConversionConfig()` — an OPTIONAL helper that pulls the project's CV
-///    rules from `GET /api/sdk/v1/skan/conversion-config/:projectToken` and hands them
-///    back to the host to evaluate (the SDK does not silently mutate the conversion
-///    value from server config without the host driving event state).
-///
-/// Every StoreKit call is availability-gated; on a platform/OS without SKAdNetwork
-/// these methods are safe no-ops. SKAN postbacks are DEVICE-only (the Simulator does
-/// not deliver them), so this surface is code-complete but device-verified.
+/// A thin, HONEST passthrough over the KMP core's SKAN surface (which wraps Apple's
+/// `SKAdNetwork` — the SDK does NOT reimplement Apple's attribution). Every call is
+/// availability-gated inside the core; on a platform/OS without SKAdNetwork these are
+/// safe no-ops. SKAN postbacks are DEVICE-only (the Simulator does not deliver them).
 public final class AttriaxSkan {
-    private let passthrough: AttriaxSkanPassthrough
-    private let configFetcher: AttriaxSkanConfigFetcher
+    private let core: AttriaxCore.Attriax
 
-    init(passthrough: AttriaxSkanPassthrough, configFetcher: AttriaxSkanConfigFetcher) {
-        self.passthrough = passthrough
-        self.configFetcher = configFetcher
+    init(core: AttriaxCore.Attriax) {
+        self.core = core
     }
 
     /// Register the app for SKAdNetwork attribution (the first postback). Idempotent
-    /// and safe to call at launch. On iOS 16.1+ this seeds conversion value 0 via
-    /// `updatePostbackConversionValue`; on iOS 15.4–15.x it uses
-    /// `updateConversionValue(0)`; on iOS 11.3–14 it calls the legacy
-    /// `registerAppForAdNetworkAttribution`.
+    /// and safe to call at launch — seeds conversion value 0 (the KMP core folds the
+    /// legacy `registerAppForAdNetworkAttribution` / `updateConversionValue(0)` paths
+    /// into a single conversion-value update).
     public func registerForAttribution() {
-        passthrough.registerForAttribution()
+        _ = core.skan.updateConversionValue(fineValue: 0, coarseValue: nil, lockWindow: false)
     }
 
     /// Update the SKAdNetwork conversion value. `fineValue` is 0–63. On iOS 16.1+ the
     /// optional `coarseValue` and `lockWindow` are applied; on earlier iOS they are
-    /// ignored (only the fine value is representable). Safe no-op where SKAdNetwork is
-    /// unavailable.
+    /// ignored. Safe no-op where SKAdNetwork is unavailable.
     public func updateConversionValue(
         _ fineValue: Int,
         coarseValue: AttriaxSkanCoarseValue? = nil,
         lockWindow: Bool = false,
         completion: ((Error?) -> Void)? = nil
     ) {
-        passthrough.updateConversionValue(
-            fineValue,
-            coarseValue: coarseValue,
-            lockWindow: lockWindow,
-            completion: completion
+        _ = core.skan.updateConversionValue(
+            fineValue: Int32(fineValue),
+            coarseValue: AttriaxBridge.kmpCoarse(from: coarseValue),
+            lockWindow: lockWindow
         )
+        // The KMP update is synchronous and returns a status result; the passthrough
+        // has no error channel, so the completion always resolves with nil.
+        completion?(nil)
     }
 
-    /// OPTIONAL: pull the project's configured SKAN conversion-value rules from the
-    /// backend (`GET /api/sdk/v1/skan/conversion-config/:projectToken`). Best-effort;
-    /// blocking I/O — call off the main thread. Returns the decoded config, or nil on
-    /// any failure (unknown token → 404, offline, malformed).
+    /// OPTIONAL: pull the project's configured SKAN conversion-value rules.
     ///
-    /// The rules are returned to the host to evaluate against its own event state —
-    /// the SDK does not silently compose + apply a conversion value from server config
-    /// alone (that requires the host's per-event/revenue state). Once the host
-    /// resolves a fine/coarse value from the rules, it calls `updateConversionValue`.
+    /// DEFERRED: the KMP `AttriaxSkan` surface exposes conversion-value updates but not
+    /// the CV-config fetch, so this currently returns nil. The public type
+    /// (`AttriaxSkanConversionConfig`) is retained; wire this through once the KMP core
+    /// exposes the config pull (or a thin transport seam is added).
     public func fetchConversionConfig() -> AttriaxSkanConversionConfig? {
-        configFetcher.fetch()
+        nil
     }
 }

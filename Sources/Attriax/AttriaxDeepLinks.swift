@@ -1,113 +1,126 @@
 import Foundation
+import AttriaxCore
 
 /// Public deep-link surface exposed as `attriax.deepLinks` (PARITY §6, rows DL1–DL4).
-/// Mirrors the Flutter reference `AttriaxDeepLinks` and the Android `AttriaxDeepLinks`,
-/// adapted to a native library: instead of a platform EventChannel, the host app
-/// forwards its iOS Universal Links / custom-scheme URLs from its AppDelegate /
-/// SceneDelegate via `handleUniversalLink` / `handleUrl`.
 ///
-/// Observers use a simple closure-listener pattern (`addListener` returns a token;
-/// pass it to `removeListener`) — no Combine dependency required.
+/// The host forwards its iOS Universal Links / custom-scheme URLs from its
+/// AppDelegate / SceneDelegate via `handleUniversalLink` / `handleUrl`; the KMP core
+/// resolves them and emits events to registered closure listeners. Observers use a
+/// simple token pattern (`addListener` returns a token; pass it to `removeListener`).
 public final class AttriaxDeepLinks {
-    private unowned let engine: Attriax
+    private let core: AttriaxCore.Attriax
+    private let lock = NSLock()
+    private var listeners = [String: DeepLinkListenerAdapter]()
+    private var rawListeners = [String: RawDeepLinkListenerAdapter]()
 
-    init(engine: Attriax) {
-        self.engine = engine
+    init(core: AttriaxCore.Attriax) {
+        self.core = core
     }
 
-    // MARK: - native capture (row DL1)
+    // MARK: - native capture
 
-    /// Feed an incoming iOS Universal Link (from
-    /// `application(_:continue:restorationHandler:)` /
-    /// `scene(_:continue:)`). The `NSUserActivity.webpageURL` string is what you
-    /// forward here. Resolution happens asynchronously; observe `addListener` for the
-    /// resolved event.
-    ///
-    /// - Parameters:
-    ///   - url: the Universal Link URL string.
-    ///   - isLaunch: pass `true` when this link launched the app (cold start), so it
-    ///     is treated as the initial link.
+    /// Feed an incoming iOS Universal Link. Pass `isLaunch: true` when this link
+    /// launched the app (cold start).
     public func handleUniversalLink(_ url: String, isLaunch: Bool = false) {
-        engine.handleIncomingDeepLink(url, isInitialLink: isLaunch)
+        core.deepLinks.handleUri(rawUri: url, isInitialLink: isLaunch)
     }
 
-    /// Feed an incoming custom-scheme URL (from `application(_:open:options:)` /
-    /// `scene(_:openURLContexts:)`). `isLaunch` marks the launch link (cold start).
-    ///
-    /// This is the iOS analog of Android's `onNewIntent` / launch-Intent handling.
+    /// Feed an incoming custom-scheme URL. `isLaunch` marks the launch link.
     public func handleUrl(_ url: String, isLaunch: Bool = false) {
-        engine.handleIncomingDeepLink(url, isInitialLink: isLaunch)
+        core.deepLinks.handleUri(rawUri: url, isInitialLink: isLaunch)
     }
 
-    /// Mark the initial-link probe complete when the app launched WITHOUT a deep
-    /// link, so `waitForInitialDeepLink` / `initialDeepLinkResolved` do not stall.
-    /// Call this from your launch path when there was no Universal Link / URL.
+    /// Mark the initial-link probe complete when the app launched WITHOUT a deep link.
+    ///
+    /// NOTE: the KMP core does not expose an explicit "no launch link" completion; the
+    /// initial-link state resolves through `handleUri` / the core's own probe. This is
+    /// therefore a no-op today — call it for forward-compatibility; see the re-wrap
+    /// report for the gap.
     public func completeLaunchWithoutLink() {
-        engine.completeInitialDeepLinkIfAbsent()
+        // No KMP equivalent — intentionally a no-op (documented gap).
     }
 
     // MARK: - observers
 
-    /// Broadcast handled deep-link events (resolved incoming + deferred matches).
-    /// Returns a token; pass it to `removeListener` to unsubscribe.
     @discardableResult
     public func addListener(_ listener: @escaping AttriaxDeepLinkListener) -> AttriaxDeepLinkListenerToken {
-        engine.addDeepLinkListener(listener)
+        let id = UUID().uuidString
+        let adapter = DeepLinkListenerAdapter(listener)
+        lock.lock()
+        listeners[id] = adapter
+        lock.unlock()
+        core.deepLinks.addListener(listener: adapter)
+        return AttriaxDeepLinkListenerToken(id: id)
     }
 
     public func removeListener(_ token: AttriaxDeepLinkListenerToken) {
-        engine.removeDeepLinkListener(token)
+        lock.lock()
+        let adapter = listeners.removeValue(forKey: token.id)
+        lock.unlock()
+        if let adapter = adapter {
+            core.deepLinks.removeListener(listener: adapter)
+        }
     }
 
-    /// Broadcast raw (pre-resolution) deep-link inputs from native capture.
     @discardableResult
     public func addRawListener(_ listener: @escaping AttriaxRawDeepLinkListener) -> AttriaxDeepLinkListenerToken {
-        engine.addRawDeepLinkListener(listener)
+        let id = UUID().uuidString
+        let adapter = RawDeepLinkListenerAdapter(listener)
+        lock.lock()
+        rawListeners[id] = adapter
+        lock.unlock()
+        core.deepLinks.addRawListener(listener: adapter)
+        return AttriaxDeepLinkListenerToken(id: id)
     }
 
     public func removeRawListener(_ token: AttriaxDeepLinkListenerToken) {
-        engine.removeRawDeepLinkListener(token)
+        lock.lock()
+        let adapter = rawListeners.removeValue(forKey: token.id)
+        lock.unlock()
+        if let adapter = adapter {
+            core.deepLinks.removeRawListener(listener: adapter)
+        }
     }
 
     // MARK: - state
 
-    /// Launch raw deep-link event captured during startup, when one was present.
-    public var rawInitialDeepLink: AttriaxRawDeepLinkEvent? { engine.rawInitialDeepLink }
+    public var rawInitialDeepLink: AttriaxRawDeepLinkEvent? {
+        core.deepLinks.rawInitialDeepLink.map(AttriaxBridge.rawDeepLinkEvent(from:))
+    }
 
-    /// Most recent handled deep-link event seen by the SDK.
-    public var latestDeepLink: AttriaxDeepLinkEvent? { engine.latestDeepLink }
+    public var latestDeepLink: AttriaxDeepLinkEvent? {
+        core.deepLinks.latestDeepLink.map(AttriaxBridge.deepLinkEvent(from:))
+    }
 
-    /// Launch deep-link event captured during startup, when one was present. Stays
-    /// nil until the initial-link probe completes; use `initialDeepLinkResolved` to
-    /// distinguish "not resolved yet" from "resolved and none found".
-    public var initialDeepLink: AttriaxDeepLinkEvent? { engine.initialDeepLink }
+    public var initialDeepLink: AttriaxDeepLinkEvent? {
+        core.deepLinks.initialDeepLink.map(AttriaxBridge.deepLinkEvent(from:))
+    }
 
-    /// Whether the initial-link probe has completed for this app session.
-    public var initialDeepLinkResolved: Bool { engine.isInitialDeepLinkResolved }
+    public var initialDeepLinkResolved: Bool {
+        core.deepLinks.initialDeepLinkResolved
+    }
 
-    /// Block until the initial-link probe finishes, returning the launch deep-link
-    /// event (or nil when none was present). MUST be called off the main thread.
+    /// Block until the initial-link probe finishes. MUST be called off the main thread.
     public func waitForInitialDeepLink() -> AttriaxDeepLinkEvent? {
-        engine.waitForInitialDeepLink()
+        core.deepLinks.waitForInitialDeepLink().map(AttriaxBridge.deepLinkEvent(from:))
     }
 
     // MARK: - manual / dynamic links
 
-    /// Record a deep link manually. Use when your router receives a URL before the
-    /// SDK captures it. `metadata` is sent with the resolution request; the resolved
-    /// event is emitted to observers.
+    /// Record a deep link manually (e.g. your router received a URL before the SDK).
     public func recordDeepLink(
         _ url: String,
         metadata: [String: Any?]? = nil,
         source: String = "manual"
     ) {
-        engine.recordDeepLink(url, metadata: metadata, source: source)
+        _ = core.deepLinks.recordDeepLink(
+            uri: url,
+            metadata: AttriaxBridge.objcMap(metadata),
+            source: source
+        )
     }
 
-    /// Create a short dynamic link. Attriax generates the short code server-side and
-    /// returns the shareable URL + persisted record. Performs blocking I/O — call off
-    /// the main thread. Throws the transport error on failure.
-    ///
+    /// Create a short dynamic link. Performs blocking I/O — call off the main thread.
     /// Note: `redirects.ios` / `redirects.android` are BOOLEAN flags (not URLs).
     @discardableResult
     public func createDynamicLink(
@@ -120,15 +133,44 @@ public final class AttriaxDeepLinks {
         redirects: AttriaxDynamicLinkRedirects? = nil,
         data: [String: Any?]? = nil
     ) throws -> AttriaxCreateDynamicLinkResult {
-        try engine.createDynamicLink(
+        let result = core.deepLinks.createDynamicLink(
             name: name,
             destinationUrl: destinationUrl,
             group: group,
             prefix: prefix,
-            socialPreview: socialPreview,
-            utms: utms,
-            redirects: redirects,
-            data: data
+            socialPreview: AttriaxBridge.kmpSocialPreview(from: socialPreview),
+            utms: AttriaxBridge.kmpUtms(from: utms),
+            redirects: AttriaxBridge.kmpRedirects(from: redirects),
+            data: AttriaxBridge.objcMap(data)
         )
+        return AttriaxBridge.createDynamicLinkResult(from: result)
+    }
+}
+
+// MARK: - KMP listener adapters
+
+/// Bridges a closure `AttriaxDeepLinkListener` to the KMP core's listener protocol.
+private final class DeepLinkListenerAdapter: NSObject, AttriaxCore.AttriaxDeepLinkListener {
+    private let callback: AttriaxDeepLinkListener
+
+    init(_ callback: @escaping AttriaxDeepLinkListener) {
+        self.callback = callback
+    }
+
+    func onDeepLink(event: AttriaxCore.AttriaxDeepLinkEvent) {
+        callback(AttriaxBridge.deepLinkEvent(from: event))
+    }
+}
+
+/// Bridges a closure `AttriaxRawDeepLinkListener` to the KMP core's listener protocol.
+private final class RawDeepLinkListenerAdapter: NSObject, AttriaxCore.AttriaxRawDeepLinkListener {
+    private let callback: AttriaxRawDeepLinkListener
+
+    init(_ callback: @escaping AttriaxRawDeepLinkListener) {
+        self.callback = callback
+    }
+
+    func onRawDeepLink(event: AttriaxCore.AttriaxRawDeepLinkEvent) {
+        callback(AttriaxBridge.rawDeepLinkEvent(from: event))
     }
 }
