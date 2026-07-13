@@ -1,7 +1,7 @@
 import Foundation
 import AttriaxCore
 
-/// Public deep-link surface exposed as `attriax.deepLinks` (PARITY §6, rows DL1–DL4).
+/// Public deep-link surface exposed as `attriax.deepLinks`.
 ///
 /// The host forwards its iOS Universal Links / custom-scheme URLs from its
 /// AppDelegate / SceneDelegate via `handleUniversalLink` / `handleUrl`; the KMP core

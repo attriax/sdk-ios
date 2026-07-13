@@ -1,10 +1,10 @@
 import Foundation
 import AttriaxCore
 
-/// Public tracking, revenue, notification, error, and identify surface
-/// (PARITY §4, rows E1–E6). A thin forward to the KMP core's `AttriaxTracking`,
+/// Public tracking, revenue, notification, error, and identify surface.
+/// A thin forward to the KMP core's `AttriaxTracking`,
 /// which owns the reserved-name lowering, currency normalization, and consent-gated
-/// enqueue. Parameter names/signatures are preserved from the standalone SDK.
+/// enqueue. Parameter names/signatures are preserved for source compatibility.
 public final class AttriaxTracking {
     private let core: AttriaxCore.Attriax
 

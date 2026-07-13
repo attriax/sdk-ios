@@ -1,6 +1,6 @@
 import Foundation
 
-/// Public device-attestation seam (PARITY §9, rows AT1–AT3; Epic 9.3 CHUNK C).
+/// Public device-attestation seam.
 ///
 /// Direct port of the Android reference `AttriaxAttestation.kt`, with the Apple
 /// provider being **App Attest** (`DCAppAttestService`) rather than Play Integrity:
@@ -17,7 +17,7 @@ import Foundation
 /// provider result, or ANY thrown error all resolve to "no envelope, open still
 /// sent" (mirrors the server's never-break-the-install invariant).
 
-/// Canonical Attriax device-attestation provider slugs (server contract, Epic 7.3a).
+/// Canonical Attriax device-attestation provider slugs (server contract).
 ///
 /// The server treats any other/absent value as `attestation_missing`, so the SDK
 /// only ever emits these two slugs. Apple platforms produce `appAttest`; `playIntegrity`

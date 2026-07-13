@@ -1,6 +1,6 @@
 import Foundation
 
-/// SDK version constants (PARITY §1 / row I3).
+/// SDK version constants.
 ///
 /// Mirrors the Flutter/Android reference:
 ///   attriaxSdkApiVersion = "v1"

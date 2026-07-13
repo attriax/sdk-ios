@@ -1,7 +1,7 @@
 import Foundation
 import AttriaxCore
 
-/// App Attest attestation provider (PARITY §9, slug `app_attest`; Epic 9.3 CHUNK C).
+/// App Attest attestation provider (slug `app_attest`).
 ///
 /// Re-wrapped onto the KMP core: the real `DCAppAttestService` flow now lives in the
 /// `AttriaxCore` framework (`AttriaxCore.AttriaxAppAttestProvider`). This type is a

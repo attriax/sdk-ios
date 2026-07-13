@@ -1,7 +1,7 @@
 // swift-tools-version:5.7
 import PackageDescription
 
-// Attriax native iOS SDK (Epic 9.3 — re-wrapped onto the shared KMP core).
+// Attriax native iOS SDK (re-wrapped onto the shared KMP core).
 //
 // The engine no longer lives here: it was extracted into the Kotlin Multiplatform
 // core (`sdk-kmp`) and ships as the `AttriaxCore` XCFramework (a STATIC framework
@@ -53,8 +53,8 @@ let package = Package(
                 .linkedFramework("Security"),
             ]
         ),
-        // No test target yet — the standalone-engine unit tests were retired with the
-        // engine (the KMP core owns that coverage). Public-API-vs-framework smoke
+        // No test target yet — the KMP core owns the engine unit-test coverage.
+        // Public-API-vs-framework smoke
         // lives in the example / host integration.
     ]
 )

@@ -4,7 +4,7 @@ import AttriaxCore
 /// The Attriax native iOS SDK — a THIN Swift facade over the KMP `AttriaxCore`
 /// engine (`AttriaxCore.Attriax`, built via `AttriaxApple`).
 ///
-/// The public surface is unchanged from the standalone SDK (so downstream
+/// The public surface is unchanged (so downstream
 /// integrators are not broken); every call forwards to the KMP core, and value
 /// objects are mapped by `AttriaxBridge`. Construct via `AttriaxSdk.create` and call
 /// `initialize()` to bootstrap.
@@ -16,19 +16,19 @@ public final class Attriax {
         self.core = core
     }
 
-    /// Public tracking / revenue / identify surface (PARITY §4).
+    /// Public tracking / revenue / identify surface.
     public private(set) lazy var tracking = AttriaxTracking(core: core)
 
-    /// Public GDPR consent surface (PARITY §5).
+    /// Public GDPR consent surface.
     public private(set) lazy var consent = AttriaxConsent(core: core)
 
-    /// Public deep-link surface (PARITY §6).
+    /// Public deep-link surface.
     public private(set) lazy var deepLinks = AttriaxDeepLinks(core: core)
 
-    /// Public App Tracking Transparency surface (PARITY §11).
+    /// Public App Tracking Transparency surface.
     public private(set) lazy var att = AttriaxAtt(core: core)
 
-    /// Public SKAdNetwork surface (PARITY §13).
+    /// Public SKAdNetwork surface.
     public private(set) lazy var skan = AttriaxSkan(core: core)
 
     // MARK: - lifecycle

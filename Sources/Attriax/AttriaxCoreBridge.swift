@@ -12,7 +12,7 @@ import AttriaxCore
 // Kept deliberately in one place so the facade classes stay declarative.
 
 /// The session snapshot is a plain value object; re-export the KMP type under the
-/// public name (it was internal-only in the standalone SDK, so this widens nothing
+/// public name (it was previously internal-only, so this widens nothing
 /// the public contract guaranteed).
 public typealias AttriaxSessionSnapshot = AttriaxCore.AttriaxSessionSnapshot
 

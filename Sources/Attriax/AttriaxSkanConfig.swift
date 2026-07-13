@@ -1,6 +1,6 @@
 import Foundation
 
-/// Decoded SKAN conversion-value config (PARITY §13 / Epic 12.2 wire shape).
+/// Decoded SKAN conversion-value config (wire shape).
 ///
 /// Mirrors the api `SdkCvConfigResponse`
 /// (`{ schemaVersion, schemaUpdatedAt, enabled, rules[], disclaimer }`). The SDK does

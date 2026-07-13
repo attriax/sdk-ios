@@ -8,7 +8,7 @@ public enum AttriaxSkanCoarseValue: String, Equatable {
     case high
 }
 
-/// Public SKAdNetwork surface (`attriax.skan`; PARITY §13 / Epic 12.2, CHUNK C).
+/// Public SKAdNetwork surface (`attriax.skan`).
 ///
 /// A thin, HONEST passthrough over the KMP core's SKAN surface (which wraps Apple's
 /// `SKAdNetwork` — the SDK does NOT reimplement Apple's attribution). Every call is

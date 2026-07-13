@@ -1,7 +1,7 @@
 import Foundation
 
-/// Reserved analytics event names used by the standardized tracking helpers
-/// (PARITY §4, row E1). Mirrors the Flutter/Android reserved keys exactly. Keep
+/// Reserved analytics event names used by the standardized tracking helpers.
+/// Mirrors the Flutter/Android reserved keys exactly. Keep
 /// in sync across SDKs so dashboard funnels, SKAN rules, and revenue rollups
 /// agree on names.
 public enum AttriaxAnalyticsEventKeys {
@@ -33,8 +33,8 @@ public enum AttriaxAnalyticsEventKeys {
     public static let pageView = "page_view"
 }
 
-/// Reserved analytics payload keys used by the standardized tracking helpers
-/// (PARITY §4, rows E2/E3). Mirrors the Flutter/Android param keys exactly.
+/// Reserved analytics payload keys used by the standardized tracking helpers.
+/// Mirrors the Flutter/Android param keys exactly.
 public enum AttriaxAnalyticsParamKeys {
     public static let revenue = "revenue"
     public static let currency = "currency"
@@ -125,7 +125,7 @@ public enum AttriaxNotificationEventType {
 
 /// Delivery channel a push notification arrived through. Wire values match the
 /// api `NotificationEventSource` enum. Inferred from the raw payload when omitted
-/// (`aps` → apns; `google.`/`gcm.` → fcm; PARITY row E6).
+/// (`aps` → apns; `google.`/`gcm.` → fcm).
 public enum AttriaxNotificationEventSource {
     case fcm
     case apns

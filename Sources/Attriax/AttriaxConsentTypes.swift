@@ -1,6 +1,6 @@
 import Foundation
 
-/// Local GDPR consent state for the current SDK device (PARITY §5, row C1).
+/// Local GDPR consent state for the current SDK device.
 ///
 /// Mirrors the Android/Flutter `AttriaxGdprConsentState` and the KMP core enum. Four
 /// states drive the whole capture/identity policy: `unknown` (default),
@@ -17,7 +17,7 @@ public enum AttriaxGdprConsentState {
     case granted
 }
 
-/// Category-level GDPR consent values (row C1): three independent booleans.
+/// Category-level GDPR consent values: three independent booleans.
 ///
 /// * `analytics` — analytics, session, crash, and diagnostic tracking.
 /// * `attribution` — attribution, install referrer, deep-link attribution, identity.

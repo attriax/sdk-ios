@@ -1,7 +1,7 @@
 import Foundation
 import AttriaxCore
 
-/// App Tracking Transparency (ATT) status (PARITY §11; Epic 8.5 / CHUNK C).
+/// App Tracking Transparency (ATT) status.
 ///
 /// Maps to the exact wire strings the api `SdkV1OpenDto.attStatus` field consumes
 /// (`authorized|denied|restricted|notDetermined|unknown`).

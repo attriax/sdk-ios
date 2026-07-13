@@ -1,6 +1,6 @@
 import Foundation
 
-/// Public deep-link value types (PARITY §6, rows DL1–DL4). Mirrors the Flutter
+/// Public deep-link value types. Mirrors the Flutter
 /// reference `types_deep_link_lifecycle.dart` + the Android `AttriaxDeepLinkTypes`.
 ///
 /// These are plain, framework-free value objects. The facade maps the KMP core's
@@ -17,7 +17,7 @@ public enum AttriaxDeepLinkTrigger {
     case deferred
 }
 
-/// Backend resolution outcome for a deep link (row DL4).
+/// Backend resolution outcome for a deep link.
 public enum AttriaxDeepLinkResolutionStatus {
     case matched
     case unmatched
@@ -42,7 +42,7 @@ public struct AttriaxBrowserAction: Equatable {
     }
 }
 
-/// A raw deep-link input captured from the host's URL forwarding (row DL1).
+/// A raw deep-link input captured from the host's URL forwarding.
 public struct AttriaxRawDeepLinkEvent: Equatable {
     /// The raw URL string as received.
     public let url: String
@@ -56,7 +56,7 @@ public struct AttriaxRawDeepLinkEvent: Equatable {
     }
 }
 
-/// A handled deep-link event emitted to observers after resolution (rows DL2/DL3).
+/// A handled deep-link event emitted to observers after resolution.
 public struct AttriaxDeepLinkEvent {
     /// The canonical resolved URL (backend URI when present, else the original link).
     public let url: String
@@ -190,7 +190,7 @@ public struct AttriaxCreateDynamicLinkResult {
     }
 }
 
-/// Observer for handled deep-link events (row DL1 listener pattern). A simple
+/// Observer for handled deep-link events (listener pattern). A simple
 /// closure-based listener — no Combine dependency required.
 public typealias AttriaxDeepLinkListener = (AttriaxDeepLinkEvent) -> Void
 

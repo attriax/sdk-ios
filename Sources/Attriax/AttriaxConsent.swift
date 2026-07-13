@@ -1,7 +1,7 @@
 import Foundation
 import AttriaxCore
 
-/// Regulation-scoped consent surface exposed as `attriax.consent` (PARITY §5).
+/// Regulation-scoped consent surface exposed as `attriax.consent`.
 /// Hosts the GDPR helpers under `gdpr`.
 public final class AttriaxConsent {
     /// GDPR-specific consent state and actions for the current device.
@@ -12,7 +12,7 @@ public final class AttriaxConsent {
     }
 }
 
-/// GDPR consent state and actions for the current device (PARITY §5, rows C1–C5).
+/// GDPR consent state and actions for the current device.
 /// A thin forward to the KMP core's `consent.gdpr`; state/values are mapped onto the
 /// plain Swift `AttriaxGdprConsentState` / `AttriaxGdprConsentValues`.
 public final class AttriaxGdprConsent {

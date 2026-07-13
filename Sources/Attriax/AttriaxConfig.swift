@@ -1,6 +1,6 @@
 import Foundation
 
-/// Immutable SDK configuration (PARITY §1, rows I2/I3).
+/// Immutable SDK configuration.
 ///
 /// Defaults mirror the Flutter/Android reference. Durations are expressed in
 /// seconds (`TimeInterval`) at the public boundary but converted to milliseconds
@@ -34,13 +34,13 @@ public struct AttriaxConfig {
     public let sessionHeartbeatInterval: TimeInterval
     public let firstLaunchSessionHeartbeatInterval: TimeInterval
     public let attestationEnabled: Bool
-    /// CHUNK C — the App Attest (or custom) attestation provider. INERT unless
+    /// the App Attest (or custom) attestation provider. INERT unless
     /// `attestationEnabled` is `true` AND this is non-nil; a nil provider degrades to
     /// the noop and no envelope is ever attached. Construct
     /// `AppAttestAttestationProvider()` (iOS 14+) or use `AttriaxAppAttest.provider()`
     /// (availability-safe) to supply App Attest.
     public let attestationProvider: AttriaxAttestationProvider?
-    /// CHUNK C — Apple Search Ads / AdServices attribution-token capture. When `true`
+    /// Apple Search Ads / AdServices attribution-token capture. When `true`
     /// the SDK captures `AAAttribution.attributionToken()` on init and POSTs it to
     /// `/api/sdk/v1/asa/token` (best-effort, off the main thread, never blocks init).
     /// Defaults to `false` (opt-in).
