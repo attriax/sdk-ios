@@ -198,7 +198,7 @@ enum AttriaxBridge {
     ) -> AttriaxSkanCvCondition {
         AttriaxSkanCvCondition(
             paramKey: condition.paramKey,
-            operator: condition.`operator`,
+            operator: condition.operator_,
             value: skanCvValue(from: condition.value)
         )
     }
@@ -207,7 +207,7 @@ enum AttriaxBridge {
         from revenue: AttriaxCore.AttriaxSkanCvRevenueCondition
     ) -> AttriaxSkanCvRevenueCondition {
         AttriaxSkanCvRevenueCondition(
-            operator: revenue.`operator`,
+            operator: revenue.operator_,
             value: skanCvValue(from: revenue.value)
         )
     }
@@ -216,13 +216,13 @@ enum AttriaxBridge {
     /// per case) to the public Swift enum, preserving the scalar type.
     static func skanCvValue(from value: AttriaxCore.AttriaxSkanCvValue?) -> AttriaxSkanCvValue? {
         guard let value = value else { return nil }
-        if let string = value as? AttriaxCore.AttriaxSkanCvValueStringValue {
+        if let string = value as? AttriaxCore.AttriaxSkanCvValue.StringValue {
             return .string(string.value)
         }
-        if let number = value as? AttriaxCore.AttriaxSkanCvValueNumberValue {
+        if let number = value as? AttriaxCore.AttriaxSkanCvValue.NumberValue {
             return .number(number.value)
         }
-        if let bool = value as? AttriaxCore.AttriaxSkanCvValueBoolValue {
+        if let bool = value as? AttriaxCore.AttriaxSkanCvValue.BoolValue {
             return .bool(bool.value)
         }
         return nil
