@@ -13,19 +13,21 @@ public enum AttriaxSdk {
 
     /// Build a runtime for `config`. Call `initialize()` afterwards to bootstrap.
     ///
-    /// - Parameter advertisingIdSupplier: retained for source compatibility. The KMP
-    ///   core now resolves the IDFA itself (ATT-gated by `config.collectAdvertisingId`),
-    ///   so a custom supplier is not forwarded; pass one only for legacy call sites.
+    /// - Parameter advertisingIdSupplier: an optional host-provided IDFA source. When
+    ///   supplied AND `config.collectAdvertisingId` is true, its value is used AHEAD of
+    ///   the KMP core's internal ATT-gated IDFA resolution (the internal seam is only
+    ///   consulted when the supplier returns nil/blank). Pass `nil` to let the core
+    ///   resolve the IDFA itself under its own ATT gate.
     public static func create(
         config: AttriaxConfig,
         advertisingIdSupplier: (() -> String?)? = nil
     ) -> Attriax {
-        _ = advertisingIdSupplier
         // userAgent nil → the KMP Apple layer resolves the REAL WKWebView Safari UA
         // (off the main thread), else a Safari-shaped fallback.
         let core = AttriaxCore.AttriaxApple.shared.create(
             config: AttriaxBridge.kmpConfig(from: config),
-            userAgent: nil
+            userAgent: nil,
+            advertisingIdSupplier: advertisingIdSupplier
         )
         return Attriax(core: core)
     }

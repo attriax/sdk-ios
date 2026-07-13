@@ -32,12 +32,13 @@ public final class AttriaxDeepLinks {
 
     /// Mark the initial-link probe complete when the app launched WITHOUT a deep link.
     ///
-    /// NOTE: the KMP core does not expose an explicit "no launch link" completion; the
-    /// initial-link state resolves through `handleUri` / the core's own probe. This is
-    /// therefore a no-op today — call it for forward-compatibility; see the re-wrap
-    /// report for the gap.
+    /// Call this from your AppDelegate / SceneDelegate launch path when the launch did
+    /// not carry a Universal Link or custom-scheme URL, so a `waitForInitialDeepLink`
+    /// observer unblocks immediately (and `initialDeepLinkResolved` flips to true with
+    /// `initialDeepLink == nil`) instead of blocking for the full timeout. Idempotent
+    /// and safe if a link later arrives via `handleUniversalLink` / `handleUrl`.
     public func completeLaunchWithoutLink() {
-        // No KMP equivalent — intentionally a no-op (documented gap).
+        core.deepLinks.completeInitialLinkIfAbsent()
     }
 
     // MARK: - observers

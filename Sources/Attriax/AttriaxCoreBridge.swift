@@ -162,6 +162,72 @@ enum AttriaxBridge {
         }
     }
 
+    // MARK: - SKAN conversion-value config (KMP AttriaxSkanConversionConfig → public Swift)
+
+    static func skanConversionConfig(
+        from config: AttriaxCore.AttriaxSkanConversionConfig
+    ) -> AttriaxSkanConversionConfig {
+        AttriaxSkanConversionConfig(
+            schemaVersion: config.schemaVersion.map { Int($0.int32Value) },
+            schemaUpdatedAt: config.schemaUpdatedAt,
+            enabled: config.enabled,
+            rules: config.rules.map(skanCvRule(from:)),
+            disclaimer: config.disclaimer
+        )
+    }
+
+    static func skanCvRule(from rule: AttriaxCore.AttriaxSkanCvRule) -> AttriaxSkanCvRule {
+        AttriaxSkanCvRule(
+            id: rule.id,
+            groupId: rule.groupId,
+            groupDisplayName: rule.groupDisplayName,
+            startBit: Int(rule.startBit),
+            bitCount: Int(rule.bitCount),
+            rank: Int(rule.rank),
+            bitContribution: Int(rule.bitContribution),
+            whenEvent: rule.whenEvent,
+            whenConditions: rule.whenConditions.map(skanCvCondition(from:)),
+            whenRevenue: rule.whenRevenue.map(skanCvRevenue(from:)),
+            coarseValue: coarse(from: rule.coarseValue),
+            lockWindow: rule.lockWindow
+        )
+    }
+
+    static func skanCvCondition(
+        from condition: AttriaxCore.AttriaxSkanCvCondition
+    ) -> AttriaxSkanCvCondition {
+        AttriaxSkanCvCondition(
+            paramKey: condition.paramKey,
+            operator: condition.`operator`,
+            value: skanCvValue(from: condition.value)
+        )
+    }
+
+    static func skanCvRevenue(
+        from revenue: AttriaxCore.AttriaxSkanCvRevenueCondition
+    ) -> AttriaxSkanCvRevenueCondition {
+        AttriaxSkanCvRevenueCondition(
+            operator: revenue.`operator`,
+            value: skanCvValue(from: revenue.value)
+        )
+    }
+
+    /// Map the KMP sealed `AttriaxSkanCvValue` (exported as a base class + one subclass
+    /// per case) to the public Swift enum, preserving the scalar type.
+    static func skanCvValue(from value: AttriaxCore.AttriaxSkanCvValue?) -> AttriaxSkanCvValue? {
+        guard let value = value else { return nil }
+        if let string = value as? AttriaxCore.AttriaxSkanCvValueStringValue {
+            return .string(string.value)
+        }
+        if let number = value as? AttriaxCore.AttriaxSkanCvValueNumberValue {
+            return .number(number.value)
+        }
+        if let bool = value as? AttriaxCore.AttriaxSkanCvValueBoolValue {
+            return .bool(bool.value)
+        }
+        return nil
+    }
+
     // MARK: - value objects
 
     static func browserAction(from action: AttriaxCore.AttriaxBrowserAction?) -> AttriaxBrowserAction? {

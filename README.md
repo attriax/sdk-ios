@@ -1,112 +1,95 @@
-# Attriax native iOS SDK (Swift) — Epic 9.3
+# Attriax native iOS SDK (Swift)
 
-Standalone Swift core, Foundation-only (no SwiftPM dependencies). Per-platform
-native core — mirrors the **already-proven Android core** (`sdk-android/`, itself
-a live-verified port of the `sdk-flutter/` reference). The behavior contract is
-`sdk-android/PARITY.md`; wire shapes are confirmed against
-`api/src/modules/sdk/dto/`.
+`sdk-ios` is a **thin Swift facade over the shared Attriax core** — it is no longer a
+standalone Swift engine. The runtime (transport, persistence, connectivity, device
+identity, session lifecycle, consent, deep links, ATT/IDFA/ASA/SKAN/App Attest, and
+the real WKWebView User-Agent) lives in the Kotlin Multiplatform core (`sdk-kmp`) and
+ships as the **`AttriaxCore` XCFramework**. This module forwards every public call to
+that core (`AttriaxApple` / `AttriaxCore.Attriax`) and maps value objects across the
+Kotlin/Native Obj-C boundary in `AttriaxCoreBridge`. It mirrors the Android AAR
+re-export and the Flutter / Unity re-wraps, so all platforms share ONE engine.
 
-## Status
+The public API is preserved so downstream integrators are unchanged.
 
-**Epic 9.3, CHUNK A + CHUNK B — code-complete, UNVERIFIED.** Written blind on
-Windows (no macOS/Xcode). It has **not** been compiled or run. Compile + test on a
-Mac before relying on it. No tests are included (by request). Chunk B mirrors the
-live-verified Android consent (slice 3), deep-link (slice 4), and session-lifecycle
-(slice 6) slices, including the generation-guard downgrade-race fix.
+## Layout
 
-## What CHUNK A contains
+- `Package.swift` — consumes the vendored `Frameworks/AttriaxCore.xcframework`
+  (`.binaryTarget`, git-ignored — a reproducible build artifact of `sdk-kmp`) and
+  links the OS system frameworks the static core references (AdSupport,
+  AppTrackingTransparency, AdServices, DeviceCheck, StoreKit, WebKit, SafariServices,
+  Network, SystemConfiguration, Security).
+- `Sources/Attriax/` — the facade classes + `AttriaxCoreBridge` (the single KMP⇄Swift
+  mapping seam). No engine code, no `Internal/` tree.
 
-Core engine + tracking:
+## Building
 
-- **Config / version / keys** — `AttriaxConfig`, `AttriaxVersion`, reserved
-  event-name/param-key/enum tables (`AttriaxAnalyticsKeys`).
-- **Pure primitives** — id generator (UUID-v4-like), User-Agent builder, clock +
-  ISO-8601, revenue lowering (currency validation / refund negation /
-  notification-source inference), dependency-free JSON codec.
-- **Request layer** — `AttriaxApiRequest`, endpoints, per-endpoint body builders
-  (open/event/session/user/crash/notification/uninstall/receipt), batching
-  (identity hoist + strip + run collection + limits).
-- **Queue / dispatch** — persisted queue codec (+ legacy `appToken`→`projectToken`
-  / `identify`→`user` normalization), queue manager (FIFO overflow, flush/enqueue
-  race preservation), retry policy (retryable statuses, `Retry-After`/jittered
-  backoff, terminal drop), app-open hoist, dispatcher (hoist → batch/single →
-  retry/drop → single-flight).
-- **Session** — continuation-window policy + snapshot store + snapshot state
-  machine; init emits the initial `start` and any recovered `end` (row S5).
-- **Public surface** — `Attriax`, `AttriaxTracking`, `AttriaxSdk.create`,
-  `validateReceipt` (CHUNK C adds `attriax.att` / `attriax.skan` and the
-  `AttriaxConfig.attestationProvider` / `asaAttributionEnabled` opt-ins).
-- **Platform I/O** — `URLSession` transport (stamps the UA, unwraps `{data}`,
-  typed errors), suite-scoped `UserDefaults` store, `NWPathMonitor` connectivity,
-  IDFV device-id source (+ ATT/IDFA supplier seam).
+The XCFramework is produced from `sdk-kmp` (requires a Mac with Xcode — Kotlin/Native
+Apple targets do not build on Windows/Linux). Build it there, drop it at
+`Frameworks/AttriaxCore.xcframework`, then:
 
-## What CHUNK B adds
+```
+swift build          # from sdk-ios/
+```
 
-- **Consent + anonymous mode** (`attriax.consent.gdpr`, rows C1–C5) — local state
-  machine (`unknown`/`not_required`/`pending`/`granted`), apply-locally-immediately
-  + generation-guarded background sync (the downgrade-race fix), two-gate anonymous
-  policy (`allowsCategory` strict vs `canCaptureSignal`/`trackingDecisionFor`
-  permissive), the consent-aware `enqueueTracked` gate (drop / anonymize /
-  defer-network) replacing the `enabled`-only gate, the three consent-resolution
-  queue-rewrite passes (identify / anonymize / discard `gdpr_consent_denied`), and
-  `requestDataErasure` → `/privacy/gdpr/erase`.
-- **Deep links** (`attriax.deepLinks`, rows DL1–DL5) — `handleUniversalLink(_:)` /
-  `handleUrl(_:)` forwarding from the host's AppDelegate/SceneDelegate, direct
-  resolve (normalized `linkPath`, 2s dedup, terminal-drop-exempt), deferred recovery
-  from the app-open response (`deepLink` > `reinstallReferrer` > `installReferrer`,
-  fire-once persisted, skip on `appDataClear`), closure-listener/observer pattern
-  (no Combine), and `createDynamicLink` → `/dynamic-links` (`iosRedirect`/
-  `androidRedirect` are booleans).
-- **Session lifecycle** (rows S2–S5) — heartbeat timer (first-launch 30s → 5min)
-  off the main thread, foreground/background/terminate via `UIApplication`
-  notifications (`didBecomeActive` → resume|new-start, `didEnterBackground` → pause
-  + flush + cancel heartbeat, `willTerminate` → end), and the dispatcher keep-alive
-  injection (a batch carrying a live-session event gets a synthetic heartbeat;
-  delivery bumps last-activity).
+See `VERIFICATION.md` for the full Mac build + smoke checklist.
 
-## What CHUNK C adds (Apple frameworks — inert/opt-in by config)
+## Public API
 
-Every Apple framework is imported behind `#if canImport(...)` and used behind
-`@available(...)`; the base config (all OFF) references none of their symbols and the
-min deployment target stays iOS 13.
-
-- **ATT** (`attriax.att`, AppTrackingTransparency, iOS 14+) — `att.status` reads
-  `ATTrackingManager.trackingAuthorizationStatus` (mapped to `authorized|denied|
-  restricted|notDetermined|unknown`) and it is stamped TOP-LEVEL on the app-open as
-  `attStatus`; `att.requestTrackingAuthorization { … }` is the host opt-in prompt (the
-  SDK NEVER auto-prompts).
-- **IDFA** (AdSupport, iOS 14+) — the chunk-A IDFA seam is wired to
-  `ASIdentifierManager.advertisingIdentifier`, consulted ONLY when ATT `.authorized`
-  AND `collectAdvertisingId` (source `ios_idfa`); else IDFV / persistent storage.
-- **Apple Search Ads** (AdServices, iOS 14.3+) — `asaAttributionEnabled` captures
-  `AAAttribution.attributionToken()` and POSTs it to `/api/sdk/v1/asa/token`
-  (best-effort, off-thread, never blocks init).
-- **SKAdNetwork** (`attriax.skan`, StoreKit; SKAN 4 = iOS 16.1+ with 14/15 fallbacks)
-  — a thin honest passthrough: `registerForAttribution()`, `updateConversionValue(fine,
-  coarseValue:, lockWindow:)`, and `fetchConversionConfig()` (pulls the project CV
-  rules from `/api/sdk/v1/skan/conversion-config/:projectToken`).
-- **App Attest** (`AttriaxConfig.attestationProvider`, DeviceCheck, iOS 14+) — the
-  `AttriaxAttestationProvider` seam + `NoopAttestationProvider` default +
-  `AppAttestAttestationProvider` (`DCAppAttestService`). When `attestationEnabled` and a
-  provider is set, init resolves a challenge nonce → App Attest object → the open body
-  carries `attestation: { provider:"app_attest", token, nonce, keyId }`. ANY failure →
-  no envelope, open still sent.
-
-## Usage
+Construct via `AttriaxSdk.create` and call `initialize()`:
 
 ```swift
 let attriax = AttriaxSdk.create(config: AttriaxConfig(projectToken: "pt_..."))
 attriax.initialize()
+
 attriax.tracking.recordEvent("level_complete", eventData: ["level": 3])
 attriax.tracking.recordPurchase(revenue: 4.99, currency: "USD", productId: "gold_100")
+attriax.tracking.setUser(userId: "u_42")
 
-// Consent (call off the main thread for the network variants)
+// Consent (network variants: call off the main thread)
 attriax.consent.gdpr.setConsent(analytics: true, attribution: true, adEvents: false)
 
 // Deep links — forward from your AppDelegate / SceneDelegate
 attriax.deepLinks.addListener { event in print("deep link:", event.url) }
-// application(_:continue:restorationHandler:) → activity.webpageURL
-attriax.deepLinks.handleUniversalLink(url.absoluteString, isLaunch: true)
-// application(_:open:options:) / scene(_:openURLContexts:)
-attriax.deepLinks.handleUrl(url.absoluteString)
+attriax.deepLinks.handleUniversalLink(url.absoluteString, isLaunch: true) // Universal Link
+attriax.deepLinks.handleUrl(url.absoluteString)                            // custom scheme
+attriax.deepLinks.completeLaunchWithoutLink()                             // launched with no link
 ```
+
+Surfaces, all forwarding to the core:
+
+- **`attriax.tracking`** — `recordEvent`, `recordPageView`, `recordPurchase`,
+  `recordRefund`, `recordAdRevenue`, `recordAdEvent`, `recordError`,
+  `recordNotification(Received/Opened/Dismissed)`, `setUser` /
+  `setUserProperty(ies)` / `clearUserProperties`, `registerApnsToken`.
+- **`attriax.consent.gdpr`** — `state`, `values`, `isWaitingForConsent`,
+  `needsConsent`, `setConsent`, `setNotRequired`, `reset`, `requestDataErasure`.
+- **`attriax.deepLinks`** — `handleUniversalLink` / `handleUrl` /
+  `completeLaunchWithoutLink`, `addListener` / `addRawListener` (+ remove),
+  `initialDeepLink` / `latestDeepLink` / `rawInitialDeepLink` /
+  `initialDeepLinkResolved` / `waitForInitialDeepLink`, `recordDeepLink`,
+  `createDynamicLink`.
+- **`attriax.att`** — `status` (reads ATT, never prompts),
+  `requestTrackingAuthorization` (host opt-in prompt).
+- **`attriax.skan`** — `registerForAttribution`, `updateConversionValue`,
+  `fetchConversionConfig` (pulls the project's configured CV rules from
+  `GET /api/sdk/v1/skan/conversion-config/<projectToken>`).
+- **top-level** — `initialize`, `flush`, `reset`, `dispose`, `isInitialized`,
+  `isFirstLaunch`, `deviceId`, `enabled`, `anonymousTrackingEnabled`,
+  `currentSession`, `validateReceipt`.
+- **App Attest** — opt in via `AttriaxConfig.attestationProvider`
+  (`AppAttestAttestationProvider`); the core attaches the attestation envelope to the
+  app-open and degrades to no-envelope on any failure.
+
+### Advertising id
+
+`AttriaxSdk.create(config:advertisingIdSupplier:)` accepts an optional host-provided
+IDFA source. When supplied and `config.collectAdvertisingId` is true, its value is
+used ahead of the core's internal ATT-gated IDFA resolution (the internal seam is
+consulted only when the supplier returns nil/blank). Pass `nil` to let the core
+resolve the IDFA itself under its own ATT gate.
+
+## Tests
+
+The engine's unit-test coverage lives in the KMP core (`sdk-kmp`, `commonTest`). This
+module has no test target; public-API-vs-framework smoke lives in the example / host
+integration (see `VERIFICATION.md`).

@@ -8,10 +8,8 @@ import Foundation
 /// per-event/revenue state); it surfaces the ordered rule list to the host, which
 /// evaluates it and calls `AttriaxSkan.updateConversionValue`.
 ///
-/// NOTE: the config-fetch (`AttriaxSkan.fetchConversionConfig`) is not yet wired
-/// through the KMP core — the KMP `AttriaxSkan` surface exposes conversion-value
-/// updates but not the config pull. These value types are retained so the public API
-/// is unchanged; see `AttriaxSkan.fetchConversionConfig`.
+/// Populated by `AttriaxSkan.fetchConversionConfig`, which pulls the config through
+/// the shared KMP core (GET `/api/sdk/v1/skan/conversion-config/<projectToken>`).
 public struct AttriaxSkanConversionConfig: Equatable {
     public let schemaVersion: Int?
     public let schemaUpdatedAt: String?

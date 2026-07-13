@@ -48,13 +48,17 @@ public final class AttriaxSkan {
         completion?(nil)
     }
 
-    /// OPTIONAL: pull the project's configured SKAN conversion-value rules.
+    /// OPTIONAL: pull the project's configured SKAN conversion-value rules from the
+    /// backend (Epic 12.2 CV management).
     ///
-    /// DEFERRED: the KMP `AttriaxSkan` surface exposes conversion-value updates but not
-    /// the CV-config fetch, so this currently returns nil. The public type
-    /// (`AttriaxSkanConversionConfig`) is retained; wire this through once the KMP core
-    /// exposes the config pull (or a thin transport seam is added).
+    /// Delegates to the KMP core's `fetchConversionConfig`, which GETs
+    /// `/api/sdk/v1/skan/conversion-config/<projectToken>` and decodes the api
+    /// `SdkCvConfigResponse`. Returns `nil` when the project has no schema, the token
+    /// is unknown, or the pull fails — it is best-effort and never throws. The SDK does
+    /// NOT auto-apply these rules; evaluate them against your own event/revenue state
+    /// and call `updateConversionValue`. Performs blocking network I/O — call off the
+    /// main thread.
     public func fetchConversionConfig() -> AttriaxSkanConversionConfig? {
-        nil
+        core.skan.fetchConversionConfig().map(AttriaxBridge.skanConversionConfig(from:))
     }
 }
