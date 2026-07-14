@@ -31,10 +31,14 @@ let package = Package(
     ],
     dependencies: [],
     targets: [
-        // The KMP core, vendored as a binary XCFramework.
+        // The KMP core, consumed as a remote binary XCFramework from the GitHub
+        // Release. For local dev against an unreleased core, swap this back to
+        // `path: "Frameworks/AttriaxCore.xcframework"` after running
+        // scripts/build-xcframework.sh.
         .binaryTarget(
             name: "AttriaxCore",
-            path: "Frameworks/AttriaxCore.xcframework"
+            url: "https://github.com/attriax/sdk-ios/releases/download/0.6.0/AttriaxCore.xcframework.zip",
+            checksum: "7508371ac2da86e31b78042f46226d943d3f3f3a590dc4e1636db53460308bd5"
         ),
         .target(
             name: "Attriax",
