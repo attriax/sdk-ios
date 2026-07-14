@@ -134,5 +134,4 @@ fi
 
 echo ""
 echo "==> Release asset prepared: ${ZIP_PATH}"
-echo "    Keep AttriaxVersion.swift (packageVersion), the git tag, and Attriax.podspec"
-echo "    version in lockstep at ${VERSION}."
+echo "    Keep AttriaxVersion.swift (packageVersion) and the git tag in lockstep at ${VERSION}."

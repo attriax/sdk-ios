@@ -12,9 +12,9 @@
 # emit the XCFramework only build on macOS (declared-but-disabled off-Mac).
 #
 # Run this before:
-#   * `swift build` / `pod install` against the standalone `Attriax` package, and
+#   * `swift build` against the standalone `Attriax` SwiftPM package, and
 #   * testing the Flutter iOS plugin locally (`attriax_flutter_ios` vendors the same
-#     XCFramework from a LOCAL path — see PUBLISHING.md).
+#     XCFramework from a LOCAL path via its own path-sourced pod — see PUBLISHING.md).
 #
 set -euo pipefail
 
@@ -60,5 +60,5 @@ rm -rf "${DEST_XCFRAMEWORK}"
 cp -R "${BUILT_XCFRAMEWORK}" "${DEST_XCFRAMEWORK}"
 
 echo ""
-echo "==> Done: framework vendored, ready for \`swift build\` / \`pod install\`."
+echo "==> Done: framework vendored, ready for \`swift build\` (SwiftPM) or the Flutter iOS plugin's local \`pod install\`."
 echo "    Vendored: ${DEST_XCFRAMEWORK}"
