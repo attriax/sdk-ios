@@ -4,7 +4,7 @@ import Foundation
 ///
 /// Mirrors the Flutter/Android reference:
 ///   attriaxSdkApiVersion = "v1"
-///   attriaxSdkPackageVersion = "0.5.0"
+///   attriaxSdkPackageVersion = "0.6.0"
 ///
 /// Shipped on session/crash payloads as `sdkApiVersion` / `sdkPackageVersion`
 /// and load-bearing for the wire User-Agent (see `AttriaxUserAgent`).
@@ -13,5 +13,5 @@ public enum AttriaxVersion {
     public static let apiVersion = "v1"
 
     /// SDK package/release version. Kept in lockstep with the Flutter reference.
-    public static let packageVersion = "0.5.0"
+    public static let packageVersion = "0.6.0"
 }
