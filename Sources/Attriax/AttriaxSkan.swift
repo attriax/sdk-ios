@@ -8,6 +8,20 @@ public enum AttriaxSkanCoarseValue: String, Equatable {
     case high
 }
 
+/// Outcome of a SKAdNetwork conversion-value update. Mirrors the KMP core's
+/// `AttriaxSkanUpdateStatus` (and the Flutter reference) 1:1; raw values are the
+/// snake_case wire strings. `notSupported` is returned on any non-iOS platform / OS
+/// below the SKAN floor, where the update is a safe no-op.
+public enum AttriaxSkanUpdateStatus: String, Equatable {
+    case updated
+    case skipped
+    case alreadyAtOrAboveValue = "already_at_or_above_value"
+    case invalidValue = "invalid_value"
+    case disabled
+    case notSupported = "not_supported"
+    case error
+}
+
 /// Public SKAdNetwork surface (`attriax.skan`).
 ///
 /// A thin, HONEST passthrough over the KMP core's SKAN surface (which wraps Apple's
@@ -32,20 +46,23 @@ public final class AttriaxSkan {
     /// Update the SKAdNetwork conversion value. `fineValue` is 0–63. On iOS 16.1+ the
     /// optional `coarseValue` and `lockWindow` are applied; on earlier iOS they are
     /// ignored. Safe no-op where SKAdNetwork is unavailable.
+    ///
+    /// The KMP update is synchronous, so the resolved `AttriaxSkanUpdateStatus` is
+    /// returned directly (no completion handler — the earlier `(Error?) -> Void` callback
+    /// was misleading: it fired synchronously and always with `nil`, discarding the real
+    /// status). Result is `@discardableResult` for fire-and-forget callers.
+    @discardableResult
     public func updateConversionValue(
         _ fineValue: Int,
         coarseValue: AttriaxSkanCoarseValue? = nil,
-        lockWindow: Bool = false,
-        completion: ((Error?) -> Void)? = nil
-    ) {
-        _ = core.skan.updateConversionValue(
+        lockWindow: Bool = false
+    ) -> AttriaxSkanUpdateStatus {
+        let result = core.skan.updateConversionValue(
             fineValue: Int32(fineValue),
             coarseValue: AttriaxBridge.kmpCoarse(from: coarseValue),
             lockWindow: lockWindow
         )
-        // The KMP update is synchronous and returns a status result; the passthrough
-        // has no error channel, so the completion always resolves with nil.
-        completion?(nil)
+        return AttriaxBridge.skanUpdateStatus(from: result)
     }
 
     /// OPTIONAL: pull the project's configured SKAN conversion-value rules from the

@@ -51,8 +51,8 @@ enum AttriaxBridge {
             trackingAuthorizationStatusTimeoutMs: 60_000,
             skan: nil,
             asaTokenCaptureEnabled: config.asaAttributionEnabled,
-            doNotSell: nil,
-            usPrivacy: nil
+            doNotSell: kbool(config.doNotSell),
+            usPrivacy: config.usPrivacy
         )
     }
 
@@ -89,6 +89,14 @@ enum AttriaxBridge {
         case .some(.high): return AttriaxCore.AttriaxSkanCoarseValue.high
         case .none: return nil
         }
+    }
+
+    /// Map the KMP `AttriaxSkanUpdateResult` to the public Swift status enum (the facade
+    /// surfaces only the resolved status; the fine/coarse/lock echo lives in KMP state).
+    static func skanUpdateStatus(
+        from result: AttriaxCore.AttriaxSkanUpdateResult
+    ) -> AttriaxSkanUpdateStatus {
+        AttriaxSkanUpdateStatus(rawValue: result.status.wireValue) ?? .error
     }
 
     static func gdprState(from state: AttriaxCore.AttriaxGdprConsentState) -> AttriaxGdprConsentState {

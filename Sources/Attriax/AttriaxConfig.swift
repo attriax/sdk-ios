@@ -46,6 +46,17 @@ public struct AttriaxConfig {
     /// Defaults to `false` (opt-in).
     public let asaAttributionEnabled: Bool
     public let pinnedCertificateSHA256Fingerprints: [String]
+    /// CCPA "do not sell / share" election, seeded into the `consent.ccpa` surface at
+    /// init and sent TOP-LEVEL as `doNotSell` on the app-open / batch envelopes. `nil`
+    /// leaves it unset (omitted from the wire); an explicit `false` IS emitted (it may
+    /// clear a prior server-side latch). Overridable at runtime via
+    /// `attriax.consent.ccpa.setDoNotSell(_:)`. Mirrors Flutter's `AttriaxConfig.doNotSell`.
+    public let doNotSell: Bool?
+    /// IAB US Privacy string (e.g. `1YYN`), seeded into `consent.ccpa` and sent
+    /// TOP-LEVEL as `usPrivacy`. `nil`/empty is omitted from the wire. Overridable at
+    /// runtime via `attriax.consent.ccpa.setUsPrivacy(_:)`. Mirrors Flutter's
+    /// `AttriaxConfig.usPrivacy`.
+    public let usPrivacy: String?
 
     public init(
         projectToken: String,
@@ -67,7 +78,9 @@ public struct AttriaxConfig {
         attestationEnabled: Bool = false,
         attestationProvider: AttriaxAttestationProvider? = nil,
         asaAttributionEnabled: Bool = false,
-        pinnedCertificateSHA256Fingerprints: [String] = []
+        pinnedCertificateSHA256Fingerprints: [String] = [],
+        doNotSell: Bool? = nil,
+        usPrivacy: String? = nil
     ) {
         precondition(maxQueueSize > 0, "maxQueueSize must be positive")
         self.projectToken = projectToken
@@ -90,6 +103,8 @@ public struct AttriaxConfig {
         self.attestationProvider = attestationProvider
         self.asaAttributionEnabled = asaAttributionEnabled
         self.pinnedCertificateSHA256Fingerprints = pinnedCertificateSHA256Fingerprints
+        self.doNotSell = doNotSell
+        self.usPrivacy = usPrivacy
     }
 
     /// The token with surrounding whitespace stripped (Flutter trims the token).

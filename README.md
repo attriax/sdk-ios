@@ -63,6 +63,9 @@ Surfaces, all forwarding to the core:
   `setUserProperty(ies)` / `clearUserProperties`, `registerApnsToken`.
 - **`attriax.consent.gdpr`** — `state`, `values`, `isWaitingForConsent`,
   `needsConsent`, `setConsent`, `setNotRequired`, `reset`, `requestDataErasure`.
+- **`attriax.consent.ccpa`** — `doNotSell`, `usPrivacy`, `setDoNotSell`,
+  `setUsPrivacy`, `set(doNotSell:usPrivacy:)` (CCPA "do not sell / share";
+  also seedable via `AttriaxConfig.doNotSell` / `.usPrivacy`).
 - **`attriax.deepLinks`** — `handleUniversalLink` / `handleUrl` /
   `completeLaunchWithoutLink`, `addListener` / `addRawListener` (+ remove),
   `initialDeepLink` / `latestDeepLink` / `rawInitialDeepLink` /
