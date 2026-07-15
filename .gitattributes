@@ -1,0 +1,24 @@
+# Line-ending policy for sdk-ios.
+#
+# NOTE: .gitattributes do not cross repository boundaries, so this submodule does
+# not inherit the workspace-root .gitattributes. It needs its own.
+#
+# Git for Windows ships core.autocrlf=true as a SYSTEM default
+# (C:/Program Files/Git/etc/gitconfig), which checks text files out as CRLF on a
+# fresh Windows clone.
+#
+# scripts/build-xcframework.sh and scripts/release-apple.sh are POSIX shell scripts
+# that run on a Mac (they build the AttriaxCore XCFramework from sdk-kmp's Apple
+# targets and cut the release). A CRLF checkout gives them a `#!/bin/sh\r` shebang,
+# which fails with an obscure "no such file or directory".
+#
+# This matters MORE here than elsewhere, not less: this repo is authored on Windows
+# but its scripts only ever execute on a Mac, so nobody on the authoring machine
+# would notice a CRLF checkout until the Mac pass fails. This repo currently carries
+# a local `core.autocrlf=false`, but local config is machine-local and never travels
+# with the repo — the Mac clone gets the system default. This attribute travels.
+#
+# Deliberately targeted: the Swift facade is hand-written with no LF-regenerating
+# tooling, and the vendored AttriaxCore.xcframework is git-ignored, so a blanket
+# `* text=auto eol=lf` would buy nothing.
+*.sh text eol=lf
