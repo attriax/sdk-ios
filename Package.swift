@@ -31,10 +31,13 @@ let package = Package(
     ],
     dependencies: [],
     targets: [
-        // The KMP core, vendored as a binary XCFramework.
+        // The KMP core as a binary XCFramework, resolved from the matching GitHub
+        // Release (SwiftPM verifies the checksum). Local dev may swap this back to
+        // `path: "Frameworks/AttriaxCore.xcframework"` — release tags keep the URL form.
         .binaryTarget(
             name: "AttriaxCore",
-            path: "Frameworks/AttriaxCore.xcframework"
+            url: "https://github.com/attriax/sdk-ios/releases/download/0.6.1/AttriaxCore.xcframework.zip",
+            checksum: "a583919ad25224512136b707d7e18b09d100c04474f31b0a94a085596377f03c"
         ),
         .target(
             name: "Attriax",
